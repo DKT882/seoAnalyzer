@@ -1,8 +1,21 @@
-import { tokenizeText, extractNGrams } from '../nlp/tokenizer';
+/**
+ * SEO Intel Pro - Production-Quality Keyword Extraction & Intelligence Engine
+ * Extracts genuine SEO keywords from clean DOM content, generates sentence-bounded candidates,
+ * detects primary keywords with evidence, produces actionable recommendations and opportunities,
+ * and strictly separates EXTRACTED vs RECOMMENDED vs EXTERNAL data sources.
+ */
+
+import { generateCleanCandidates, CandidatePhrase } from './candidateGenerator';
+import { detectPrimaryKeyword } from './primaryKeywordDetector';
+import { generateRecommendedKeywords } from './recommendedKeywords';
 import { calculateProminenceScore } from './prominence';
 import { calculateInternalTfIdf } from '../nlp/tfidf';
 import { calculateKeywordScore } from './scoring';
 import { clusterKeywords, extractEntities } from '../nlp/clusterer';
+import { extractCleanContent, ExtractedPageContent } from '../parser/contentExtractor';
+import { cleanRawText, segmentSentences } from '../nlp/textCleaner';
+import { isArtifactOrGarbage } from '../nlp/artifactFilter';
+import { QUESTION_STARTERS } from '../nlp/stopwords';
 import {
   KeywordItem,
   NGramType,
@@ -12,8 +25,8 @@ import {
   ImagesAnalysis,
   TopicCluster,
   EntityItem,
+  SearchIntent,
 } from '@/types';
-import { QUESTION_PREFIXES } from '@/lib/constants';
 import crypto from 'node:crypto';
 
 export interface ExtractedKeywordsResult {
@@ -27,20 +40,62 @@ export interface ExtractedKeywordsResult {
   entities: EntityItem[];
   clusters: TopicCluster[];
   opportunities: KeywordOpportunityItem[];
+  recommended: KeywordItem[];
+  recommendationNotice?: string;
+  primaryKeywordDetails: {
+    keyword: string;
+    confidenceScore: number;
+    evidence: string[];
+  };
   totalWords: number;
   uniqueWords: number;
 }
 
+/**
+ * Main entry point for single-page and multi-page keyword intelligence extraction.
+ */
 export function extractAndScoreKeywords(
   visibleText: string,
   onPage: OnPageData,
   links: LinksAnalysis,
   images: ImagesAnalysis,
-  pageUrl: string
+  pageUrl: string,
+  rawHtml?: string
 ): ExtractedKeywordsResult {
-  const tokens = tokenizeText(visibleText);
-  const totalWords = tokens.length;
-  const uniqueWords = new Set(tokens.map((t) => t.token)).size;
+  // 1. Prepare Clean Content & Sentence Segments
+  let cleanContent: ExtractedPageContent;
+  if (rawHtml && typeof rawHtml === 'string' && rawHtml.length > 0) {
+    cleanContent = extractCleanContent(rawHtml);
+  } else {
+    const cleaned = cleanRawText(visibleText);
+    const sentences = segmentSentences(cleaned);
+    const h1Items = onPage.headings?.items?.filter((h) => h.level === 1).map((h) => h.text) || [];
+    const h2H6Items = onPage.headings?.items?.filter((h) => h.level >= 2).map((h) => h.text) || [];
+    const altList = images.images.map((img) => img.alt).filter(Boolean);
+    const anchorList = (links.internalLinks || []).concat(links.externalLinks || []).map((l) => l.text).filter(Boolean);
+
+    cleanContent = {
+      cleanVisibleText: cleaned,
+      cleanFullText: cleaned,
+      mainContentText: cleaned,
+      title: onPage.title || '',
+      metaDescription: onPage.metaDescription || '',
+      h1List: h1Items,
+      h2H6List: h2H6Items,
+      navText: '',
+      footerText: '',
+      altTexts: altList,
+      anchorTexts: anchorList,
+      sentences,
+    };
+  }
+
+  // Count clean words
+  const wordsArray = cleanContent.cleanVisibleText
+    .toLowerCase()
+    .match(/[a-zA-Z0-9]+(?:[-'][a-zA-Z0-9]+)*/g) || [];
+  const totalWords = wordsArray.length;
+  const uniqueWords = new Set(wordsArray).size;
 
   if (totalWords === 0) {
     return {
@@ -54,101 +109,90 @@ export function extractAndScoreKeywords(
       entities: [],
       clusters: [],
       opportunities: [],
+      recommended: [],
+      primaryKeywordDetails: {
+        keyword: onPage.title || 'General Topic',
+        confidenceScore: 50,
+        evidence: ['No text content found on page'],
+      },
       totalWords: 0,
       uniqueWords: 0,
     };
   }
 
-  // Pre-process comparison strings
-  const titleLower = onPage.title.toLowerCase();
-  const metaDescLower = onPage.metaDescription.toLowerCase();
+  // 2. Generate Candidate Phrases (Sentence-Bounded, strictly filtered)
+  const candidateMap = generateCleanCandidates({
+    sentences: cleanContent.sentences,
+    title: cleanContent.title,
+    metaDescription: cleanContent.metaDescription,
+    h1List: cleanContent.h1List,
+    h2H6List: cleanContent.h2H6List,
+    mainContentText: cleanContent.mainContentText,
+    altTexts: cleanContent.altTexts,
+    anchorTexts: cleanContent.anchorTexts,
+    pageUrl,
+    navText: cleanContent.navText,
+    footerText: cleanContent.footerText,
+  });
 
-  let urlSlug = '';
-  try {
-    const parsed = new URL(pageUrl);
-    const rawPath = `${parsed.pathname} ${parsed.search}`;
-    let decodedPath = rawPath;
-    try {
-      decodedPath = decodeURIComponent(rawPath);
-    } catch {
-      // fallback
-    }
-    urlSlug = `${rawPath} ${decodedPath}`.replace(/[-_./]/g, ' ').toLowerCase();
-  } catch {
-    urlSlug = pageUrl.toLowerCase();
-  }
+  const candidatesList: CandidatePhrase[] = Array.from(candidateMap.values());
 
-  const h1Texts = onPage.headings.items
-    .filter((h) => h.level === 1)
-    .map((h) => h.text.toLowerCase())
-    .join(' ');
+  // 3. Detect Primary Keyword with Multi-Signal Evidence
+  const primaryResult = detectPrimaryKeyword({
+    candidates: candidatesList,
+    title: cleanContent.title,
+    h1: cleanContent.h1List[0] || '',
+    metaDescription: cleanContent.metaDescription,
+    totalWords,
+  });
 
-  const h2H6Texts = onPage.headings.items
-    .filter((h) => h.level >= 2)
-    .map((h) => h.text.toLowerCase())
-    .join(' ');
-
-  const anchorTexts = links.internalLinks
-    .concat(links.externalLinks)
-    .map((l) => l.text.toLowerCase())
-    .join(' ');
-
-  const altTexts = images.images.map((img) => img.alt.toLowerCase()).join(' ');
-
-  // Extract N-gram candidates (1 to 4 words)
-  const nGramCandidates = extractNGrams(tokens);
+  // 4. Score and Format all Valid Candidates
   const allKeywordItems: KeywordItem[] = [];
 
-  for (const candidate of nGramCandidates.values()) {
-    const phrase = candidate.phrase;
-    const phraseLower = phrase.toLowerCase();
-    const wordCountInPhrase = candidate.words.length;
+  for (const cand of candidatesList) {
+    const phrase = cand.phrase;
+    const wordCountInPhrase = cand.words.length;
 
-    // Minimum frequency filter to avoid noisy 1-off phrases unless present in title or H1
-    const inTitle = titleLower.includes(phraseLower);
-    const inH1 = h1Texts.includes(phraseLower);
-    if (candidate.frequency === 1 && wordCountInPhrase >= 2 && !inTitle && !inH1) {
+    // Reject candidates with quality below 60
+    if (cand.qualityScore < 60 || isArtifactOrGarbage(phrase)) {
       continue;
     }
 
-    const inMeta = metaDescLower.includes(phraseLower);
-    const inUrl = urlSlug.includes(phraseLower);
-    const inH2H6 = h2H6Texts.includes(phraseLower);
-    const inAnchor = anchorTexts.includes(phraseLower);
-    const inAlt = altTexts.includes(phraseLower);
-    const inBody = true;
+    // Minimum frequency filter to avoid noisy 1-off phrases unless present in title or H1
+    if (cand.frequency === 1 && wordCountInPhrase >= 2 && !cand.inTitle && !cand.inH1) {
+      continue;
+    }
 
-    // Calculate keyword density
+    // Density calculation
     const density = parseFloat(
-      (((candidate.frequency * wordCountInPhrase) / totalWords) * 100).toFixed(2)
+      (((cand.frequency * wordCountInPhrase) / totalWords) * 100).toFixed(2)
     );
 
-    // Calculate positional prominence
-    const prominenceScore = calculateProminenceScore(candidate.firstPosition, totalWords);
+    // Prominence score
+    const prominenceScore = calculateProminenceScore(cand.firstPosition, totalWords);
 
-    // Calculate section-based TF-IDF
-    let sectionsHit = 1; // body
-    if (inTitle) sectionsHit++;
-    if (inH1) sectionsHit++;
-    if (inH2H6) sectionsHit++;
-    if (inMeta) sectionsHit++;
-    if (inAlt) sectionsHit++;
-    const internalTfIdf = calculateInternalTfIdf(candidate.frequency, totalWords, sectionsHit, 6);
+    // Section hits
+    let sectionsHit = 1;
+    if (cand.inTitle) sectionsHit++;
+    if (cand.inH1) sectionsHit++;
+    if (cand.inH2H6) sectionsHit++;
+    if (cand.inMeta) sectionsHit++;
+    if (cand.inAlt) sectionsHit++;
+    const internalTfIdf = calculateInternalTfIdf(cand.frequency, totalWords, sectionsHit, 6);
 
-    // Calculate 0-100 score
     const scoringResult = calculateKeywordScore({
-      frequency: candidate.frequency,
+      frequency: cand.frequency,
       density,
       prominenceScore,
       internalTfIdf,
-      inTitle,
-      inH1,
-      inH2H6,
-      inMeta,
-      inUrl,
-      inAnchor,
-      inAlt,
-      inBody,
+      inTitle: cand.inTitle,
+      inH1: cand.inH1,
+      inH2H6: cand.inH2H6,
+      inMeta: cand.inMeta,
+      inUrl: cand.inUrl,
+      inAnchor: cand.inAnchor,
+      inAlt: cand.inAlt,
+      inBody: true,
       wordCountInPhrase,
     });
 
@@ -161,26 +205,55 @@ export function extractAndScoreKeywords(
         ? '3-gram'
         : 'long-tail';
 
+    // Estimate Search Intent
+    let searchIntent: SearchIntent = 'Informational';
+    const firstWord = cand.words[0].toLowerCase();
+    if (QUESTION_STARTERS.has(firstWord) || phrase.startsWith('how to') || phrase.startsWith('what is')) {
+      searchIntent = 'Informational';
+    } else if (phrase.includes('buy') || phrase.includes('price') || phrase.includes('download') || phrase.includes('coupon') || phrase.includes('order')) {
+      searchIntent = 'Transactional';
+    } else if (phrase.includes('best') || phrase.includes('review') || phrase.includes('top') || phrase.includes('vs') || phrase.includes('software') || phrase.includes('tool')) {
+      searchIntent = 'Commercial';
+    }
+
+    const isQuestion =
+      QUESTION_STARTERS.has(firstWord) ||
+      phrase.startsWith('how ') ||
+      phrase.startsWith('what ') ||
+      phrase.startsWith('why ') ||
+      phrase.startsWith('when ') ||
+      phrase.startsWith('where ') ||
+      phrase.startsWith('which ') ||
+      phrase.startsWith('can ') ||
+      phrase.startsWith('should ') ||
+      phrase.endsWith('?');
+
     allKeywordItems.push({
       id: `kw-${crypto.randomUUID().slice(0, 8)}`,
       keyword: phrase,
       nGramType,
-      category: 'secondary', // refined below
-      frequency: candidate.frequency,
+      category: 'secondary', // Refined below
+      source: 'EXTRACTED',
+      frequency: cand.frequency,
       density,
       prominenceScore,
       overallScore: scoringResult.overallScore,
-      inTitle,
-      inH1,
-      inH2H6,
-      inMeta,
-      inUrl,
-      inAnchor,
-      inAlt,
-      inBody,
+      inTitle: cand.inTitle,
+      inH1: cand.inH1,
+      inH2H6: cand.inH2H6,
+      inMeta: cand.inMeta,
+      inUrl: cand.inUrl,
+      inAnchor: cand.inAnchor,
+      inAlt: cand.inAlt,
+      inBody: true,
       wordCount: wordCountInPhrase,
-      semanticCategory: wordCountInPhrase >= 3 ? 'Long-Tail Query' : 'Core Keyword',
-      topicCluster: candidate.words[0],
+      qualityScore: cand.qualityScore,
+      searchIntent,
+      semanticCategory: isQuestion ? 'Question Query' : wordCountInPhrase >= 3 ? 'Long-Tail Query' : 'Core Keyword',
+      topicCluster: cand.words[0],
+      isQuestion,
+      confidence: cand.qualityScore,
+      reason: `Extracted from visible content (occurred ${cand.frequency}x)`,
       externalSearchVolume: 'External SEO data unavailable',
       externalDifficulty: 'Requires SEO data provider',
       externalCpc: 'External SEO data unavailable',
@@ -188,10 +261,10 @@ export function extractAndScoreKeywords(
     });
   }
 
-  // Sort all keywords by overall score descending
+  // Sort all extracted keywords by overall score descending
   allKeywordItems.sort((a, b) => b.overallScore - a.overallScore || b.frequency - a.frequency);
 
-  // Classify keywords into Primary, Secondary, Short-Tail, Long-Tail, Related, Questions
+  // 5. Categorize Extracted Keywords
   const primary: KeywordItem[] = [];
   const secondary: KeywordItem[] = [];
   const shortTail: KeywordItem[] = [];
@@ -199,45 +272,56 @@ export function extractAndScoreKeywords(
   const related: KeywordItem[] = [];
   const questions: KeywordItem[] = [];
 
-  for (const item of allKeywordItems) {
-    const isQuestion = QUESTION_PREFIXES.some((prefix) =>
-      item.keyword.toLowerCase().startsWith(prefix + ' ')
-    );
+  const primaryLower = primaryResult.keyword.toLowerCase();
 
-    if (isQuestion) {
+  for (const item of allKeywordItems) {
+    // Question classification
+    if (item.isQuestion) {
       item.category = 'question';
       if (questions.length < 20) questions.push(item);
     }
 
+    // Short-tail vs Long-tail
     if (item.nGramType === '1-gram' || item.nGramType === '2-gram') {
       if (shortTail.length < 25) shortTail.push({ ...item, category: 'short-tail' });
     } else {
       if (longTail.length < 25) longTail.push({ ...item, category: 'long-tail' });
     }
 
+    // Primary Keyword Assignment
+    const isExactPrimary = item.keyword.toLowerCase() === primaryLower;
     if (
-      primary.length < 5 &&
-      item.overallScore >= 45 &&
-      (item.inTitle || item.inH1 || item.inUrl) &&
-      !isQuestion
+      (isExactPrimary || (primary.length === 0 && (item.inTitle || item.inH1))) &&
+      primary.length < 3 &&
+      !item.isQuestion
     ) {
       item.category = 'primary';
+      item.confidence = primaryResult.confidenceScore;
+      item.evidence = primaryResult.evidence;
       primary.push(item);
-    } else if (item.overallScore >= 30 && secondary.length < 25 && !isQuestion) {
+    } else if (item.overallScore >= 35 && secondary.length < 25 && !item.isQuestion) {
       item.category = 'secondary';
       secondary.push(item);
-    } else if (related.length < 25 && !isQuestion) {
+    } else if (related.length < 25 && !item.isQuestion) {
       item.category = 'related';
       related.push(item);
     }
   }
 
-  // Generate Topic Clusters and Entities
-  const clusters = clusterKeywords(allKeywordItems);
-  const entities = extractEntities(visibleText, allKeywordItems);
+  // If primary keyword is not yet in primary array, add it
+  if (primary.length === 0 && allKeywordItems.length > 0) {
+    const topItem = allKeywordItems[0];
+    topItem.category = 'primary';
+    topItem.confidence = primaryResult.confidenceScore;
+    topItem.evidence = primaryResult.evidence;
+    primary.push(topItem);
+  }
 
-  // Generate Keyword Opportunities
-  // High-frequency or high-score terms that are missing from Title or H1 or Meta
+  // 6. Generate Entities & Topic Clusters
+  const clusters = clusterKeywords(allKeywordItems);
+  const entities = extractEntities(cleanContent.cleanVisibleText, allKeywordItems);
+
+  // 7. Generate Keyword Opportunities
   const opportunities: KeywordOpportunityItem[] = [];
   for (const item of allKeywordItems) {
     if (opportunities.length >= 15) break;
@@ -249,7 +333,7 @@ export function extractAndScoreKeywords(
 
     const missingHighValueZone = (missingFromTitle || missingFromH1) && item.frequency >= 2;
 
-    if (missingHighValueZone || (item.overallScore >= 35 && missingFromTitle)) {
+    if (missingHighValueZone || (item.overallScore >= 40 && missingFromTitle)) {
       const locations: string[] = [];
       if (item.inTitle) locations.push('Title');
       if (item.inH1) locations.push('H1');
@@ -306,8 +390,28 @@ export function extractAndScoreKeywords(
     }
   }
 
-  // Sort opportunities by opportunity score descending
   opportunities.sort((a, b) => b.opportunityScore - a.opportunityScore);
+
+  // 8. Generate Context-Grounded Recommended Keywords (Category: RECOMMENDED)
+  const headingsList = [...cleanContent.h1List, ...cleanContent.h2H6List];
+  const recommended = generateRecommendedKeywords({
+    primaryKeyword: primaryResult.keyword,
+    extractedKeywords: allKeywordItems,
+    title: cleanContent.title,
+    h1: cleanContent.h1List[0] || '',
+    metaDescription: cleanContent.metaDescription,
+    headingsList,
+    pageUrl,
+    totalWords,
+    uniqueWords,
+  });
+
+  const recommendationNotice =
+    recommended.length === 0
+      ? totalWords < 80
+        ? 'Page contains insufficient topical content to infer additional SEO targets reliably.'
+        : 'No strong keyword recommendations found from the available page/site content.'
+      : undefined;
 
   return {
     all: allKeywordItems.slice(0, 100),
@@ -320,6 +424,9 @@ export function extractAndScoreKeywords(
     entities,
     clusters,
     opportunities,
+    recommended,
+    recommendationNotice,
+    primaryKeywordDetails: primaryResult,
     totalWords,
     uniqueWords,
   };

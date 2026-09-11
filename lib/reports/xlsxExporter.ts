@@ -50,12 +50,14 @@ export function generateExcelWorkbook(
 
   // Helper for keyword rows
   const formatKwRows = (kws: typeof report.keywords.all) => [
-    ['Keyword', 'Category', 'N-Gram', 'Score', 'Frequency', 'Density (%)', 'Prominence', 'In Title', 'In H1', 'In Meta', 'In URL', 'In ALT', 'External Volume', 'External Difficulty'],
+    ['Keyword', 'Source', 'Category', 'N-Gram', 'Score', 'Quality (0-100)', 'Frequency', 'Density (%)', 'Prominence', 'In Title', 'In H1', 'In Meta', 'In URL', 'In ALT', 'External Volume', 'External Difficulty', 'Reason / Evidence'],
     ...kws.map((k) => [
       k.keyword,
+      k.source || 'EXTRACTED',
       k.category,
       k.nGramType,
       k.overallScore,
+      k.qualityScore ?? k.overallScore,
       k.frequency,
       `${k.density}%`,
       k.prominenceScore,
@@ -66,32 +68,33 @@ export function generateExcelWorkbook(
       k.inAlt ? 'Yes' : 'No',
       k.externalSearchVolume || 'Unavailable',
       k.externalDifficulty || 'Unavailable',
+      k.reason || (k.evidence ? k.evidence.join('; ') : ''),
     ]),
   ];
 
-  // 2. Sheet: Keywords (All)
+  // 2. Sheet: Keywords (All Extracted)
   const wsAllKws = XLSX.utils.aoa_to_sheet(formatKwRows(report.keywords.all));
-  setCols(wsAllKws, [30, 15, 12, 10, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25]);
+  setCols(wsAllKws, [30, 15, 15, 12, 10, 14, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25, 45]);
   XLSX.utils.book_append_sheet(wb, wsAllKws, '2. All Keywords');
 
   // 3. Sheet: Primary Keywords
   const wsPrimary = XLSX.utils.aoa_to_sheet(formatKwRows(report.keywords.primary));
-  setCols(wsPrimary, [30, 15, 12, 10, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25]);
+  setCols(wsPrimary, [30, 15, 15, 12, 10, 14, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25, 45]);
   XLSX.utils.book_append_sheet(wb, wsPrimary, '3. Primary Keywords');
 
   // 4. Sheet: Secondary Keywords
   const wsSecondary = XLSX.utils.aoa_to_sheet(formatKwRows(report.keywords.secondary));
-  setCols(wsSecondary, [30, 15, 12, 10, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25]);
+  setCols(wsSecondary, [30, 15, 15, 12, 10, 14, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25, 45]);
   XLSX.utils.book_append_sheet(wb, wsSecondary, '4. Secondary Keywords');
 
   // 5. Sheet: Short Tail
   const wsShortTail = XLSX.utils.aoa_to_sheet(formatKwRows(report.keywords.shortTail));
-  setCols(wsShortTail, [30, 15, 12, 10, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25]);
+  setCols(wsShortTail, [30, 15, 15, 12, 10, 14, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25, 45]);
   XLSX.utils.book_append_sheet(wb, wsShortTail, '5. Short Tail');
 
   // 6. Sheet: Long Tail
   const wsLongTail = XLSX.utils.aoa_to_sheet(formatKwRows(report.keywords.longTail));
-  setCols(wsLongTail, [30, 15, 12, 10, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25]);
+  setCols(wsLongTail, [30, 15, 15, 12, 10, 14, 12, 14, 14, 10, 10, 10, 10, 10, 25, 25, 45]);
   XLSX.utils.book_append_sheet(wb, wsLongTail, '6. Long Tail');
 
   // 7. Sheet: Keyword Opportunities

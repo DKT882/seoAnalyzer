@@ -27,6 +27,8 @@ export interface SEOIssue {
 
 export type NGramType = '1-gram' | '2-gram' | '3-gram' | 'long-tail';
 
+export type KeywordSource = 'EXTRACTED' | 'RECOMMENDED' | 'COMPETITOR_GAP' | 'EXTERNAL';
+
 export type KeywordCategory =
   | 'primary'
   | 'secondary'
@@ -35,7 +37,8 @@ export type KeywordCategory =
   | 'related'
   | 'question'
   | 'entity'
-  | 'opportunity';
+  | 'opportunity'
+  | 'recommended';
 
 export interface KeywordItem {
   id: string;
@@ -57,6 +60,14 @@ export interface KeywordItem {
   semanticCategory?: string;
   topicCluster?: string;
   wordCount?: number;
+  source?: KeywordSource;
+  qualityScore?: number; // 0-100 KeywordQualityScore
+  searchIntent?: SearchIntent;
+  confidence?: number;
+  evidence?: string[];
+  reason?: string;
+  isQuestion?: boolean;
+  isEntity?: boolean;
   // Category B External fields (always marked explicit status)
   externalSearchVolume?: string;
   externalDifficulty?: string;
@@ -489,6 +500,13 @@ export interface SEOReport {
     entities: EntityItem[];
     clusters: TopicCluster[];
     opportunities: KeywordOpportunityItem[];
+    recommended?: KeywordItem[];
+    recommendationNotice?: string;
+    primaryKeywordDetails?: {
+      keyword: string;
+      confidenceScore: number;
+      evidence: string[];
+    };
     totalWords: number;
     uniqueWords: number;
   };

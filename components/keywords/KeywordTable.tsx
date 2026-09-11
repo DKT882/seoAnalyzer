@@ -11,7 +11,7 @@ interface KeywordTableProps {
   onSelectKeyword?: (keyword: KeywordItem) => void;
 }
 
-type SortField = 'keyword' | 'frequency' | 'density' | 'prominenceScore' | 'overallScore' | 'wordCount';
+type SortField = 'keyword' | 'frequency' | 'density' | 'prominenceScore' | 'overallScore' | 'qualityScore' | 'wordCount';
 type SortOrder = 'asc' | 'desc';
 
 export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: KeywordTableProps) {
@@ -40,6 +40,8 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
         (k) =>
           k.keyword.toLowerCase().includes(q) ||
           k.category.toLowerCase().includes(q) ||
+          (k.source && k.source.toLowerCase().includes(q)) ||
+          (k.searchIntent && k.searchIntent.toLowerCase().includes(q)) ||
           (k.semanticCategory && k.semanticCategory.toLowerCase().includes(q)) ||
           (k.topicCluster && k.topicCluster.toLowerCase().includes(q))
       );
@@ -52,6 +54,9 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
       if (sortField === 'wordCount') {
         valA = a.wordCount || a.keyword.split(' ').length;
         valB = b.wordCount || b.keyword.split(' ').length;
+      } else if (sortField === 'qualityScore') {
+        valA = a.qualityScore ?? a.overallScore;
+        valB = b.qualityScore ?? b.overallScore;
       }
 
       if (typeof valA === 'string') {
@@ -82,7 +87,7 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
           <Search size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
-            placeholder="Search keywords or clusters..."
+            placeholder="Search keywords, intent, clusters..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -119,6 +124,9 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
                 </div>
               </th>
               <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                Source
+              </th>
+              <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                 Category
               </th>
               <th
@@ -146,7 +154,15 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
                 </div>
               </th>
               <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                Key Placements
+                Placements
+              </th>
+              <th
+                onClick={() => handleSort('qualityScore')}
+                style={{ padding: '0.85rem 1rem', cursor: 'pointer', userSelect: 'none', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  Quality {renderSortIcon('qualityScore')}
+                </div>
               </th>
               <th
                 onClick={() => handleSort('overallScore')}
@@ -161,13 +177,16 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
           <tbody>
             {paginatedKeywords.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                   No keywords match the current filter.
                 </td>
               </tr>
             ) : (
               paginatedKeywords.map((item) => {
                 const { color } = getScoreColor(item.overallScore);
+                const isRecommended = item.source === 'RECOMMENDED';
+                const source = item.source || 'EXTRACTED';
+
                 return (
                   <tr
                     key={item.id || item.keyword}
@@ -190,6 +209,40 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
                       </div>
                     </td>
 
+                    {/* Source */}
+                    <td style={{ padding: '0.85rem 1rem' }}>
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '4px',
+                          background:
+                            source === 'RECOMMENDED'
+                              ? 'rgba(59, 130, 246, 0.15)'
+                              : source === 'EXTERNAL'
+                              ? 'rgba(245, 158, 11, 0.15)'
+                              : 'rgba(16, 185, 129, 0.15)',
+                          color:
+                            source === 'RECOMMENDED'
+                              ? '#60a5fa'
+                              : source === 'EXTERNAL'
+                              ? '#f59e0b'
+                              : '#10b981',
+                          border: `1px solid ${
+                            source === 'RECOMMENDED'
+                              ? 'rgba(59, 130, 246, 0.3)'
+                              : source === 'EXTERNAL'
+                              ? 'rgba(245, 158, 11, 0.3)'
+                              : 'rgba(16, 185, 129, 0.3)'
+                          }`,
+                        }}
+                      >
+                        {source}
+                      </span>
+                    </td>
+
                     {/* Category */}
                     <td style={{ padding: '0.85rem 1rem' }}>
                       <span
@@ -210,7 +263,7 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
 
                     {/* Frequency */}
                     <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {item.frequency}
+                      {item.frequency}x
                     </td>
 
                     {/* Density */}
@@ -225,68 +278,81 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
 
                     {/* Key Placements */}
                     <td style={{ padding: '0.85rem 1rem' }}>
-                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                        <span
-                          title="Title Tag"
-                          style={{
-                            fontSize: '0.68rem',
-                            padding: '0.1rem 0.35rem',
-                            borderRadius: '3px',
-                            background: item.inTitle ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                            color: item.inTitle ? '#10b981' : 'var(--text-muted)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.2rem',
-                          }}
-                        >
-                          {item.inTitle ? <Check size={10} /> : <X size={10} />} Title
+                      {isRecommended ? (
+                        <span style={{ fontSize: '0.75rem', color: '#60a5fa', fontStyle: 'italic' }}>
+                          Target Placement
                         </span>
-                        <span
-                          title="H1 Headline"
-                          style={{
-                            fontSize: '0.68rem',
-                            padding: '0.1rem 0.35rem',
-                            borderRadius: '3px',
-                            background: item.inH1 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                            color: item.inH1 ? '#10b981' : 'var(--text-muted)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.2rem',
-                          }}
-                        >
-                          {item.inH1 ? <Check size={10} /> : <X size={10} />} H1
-                        </span>
-                        <span
-                          title="H2-H6 Subheadings"
-                          style={{
-                            fontSize: '0.68rem',
-                            padding: '0.1rem 0.35rem',
-                            borderRadius: '3px',
-                            background: item.inH2H6 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                            color: item.inH2H6 ? '#10b981' : 'var(--text-muted)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.2rem',
-                          }}
-                        >
-                          {item.inH2H6 ? <Check size={10} /> : <X size={10} />} H2-6
-                        </span>
-                        <span
-                          title="Meta Description"
-                          style={{
-                            fontSize: '0.68rem',
-                            padding: '0.1rem 0.35rem',
-                            borderRadius: '3px',
-                            background: item.inMeta ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                            color: item.inMeta ? '#10b981' : 'var(--text-muted)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.2rem',
-                          }}
-                        >
-                          {item.inMeta ? <Check size={10} /> : <X size={10} />} Meta
-                        </span>
-                      </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                          <span
+                            title="Title Tag"
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '0.1rem 0.35rem',
+                              borderRadius: '3px',
+                              background: item.inTitle ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                              color: item.inTitle ? '#10b981' : 'var(--text-muted)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                            }}
+                          >
+                            {item.inTitle ? <Check size={10} /> : <X size={10} />} Title
+                          </span>
+                          <span
+                            title="H1 Headline"
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '0.1rem 0.35rem',
+                              borderRadius: '3px',
+                              background: item.inH1 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                              color: item.inH1 ? '#10b981' : 'var(--text-muted)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                            }}
+                          >
+                            {item.inH1 ? <Check size={10} /> : <X size={10} />} H1
+                          </span>
+                          <span
+                            title="H2-H6 Subheadings"
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '0.1rem 0.35rem',
+                              borderRadius: '3px',
+                              background: item.inH2H6 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                              color: item.inH2H6 ? '#10b981' : 'var(--text-muted)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                            }}
+                          >
+                            {item.inH2H6 ? <Check size={10} /> : <X size={10} />} H2-6
+                          </span>
+                          <span
+                            title="Meta Description"
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '0.1rem 0.35rem',
+                              borderRadius: '3px',
+                              background: item.inMeta ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                              color: item.inMeta ? '#10b981' : 'var(--text-muted)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                            }}
+                          >
+                            {item.inMeta ? <Check size={10} /> : <X size={10} />} Meta
+                          </span>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Quality Score */}
+                    <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.85rem' }}>
+                        {item.qualityScore ?? item.overallScore}/100
+                      </span>
                     </td>
 
                     {/* Overall Score */}

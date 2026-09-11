@@ -15,6 +15,10 @@ import {
   Boxes,
   X,
   Check,
+  Target,
+  ShieldCheck,
+  Compass,
+  Info,
 } from 'lucide-react';
 
 export interface KeywordIntelligenceViewProps {
@@ -29,6 +33,13 @@ export interface KeywordIntelligenceViewProps {
     entities: EntityItem[];
     clusters: TopicCluster[];
     opportunities: KeywordOpportunityItem[];
+    recommended?: KeywordItem[];
+    recommendationNotice?: string;
+    primaryKeywordDetails?: {
+      keyword: string;
+      confidenceScore: number;
+      evidence: string[];
+    };
     totalWords: number;
     uniqueWords: number;
   };
@@ -41,17 +52,21 @@ export function KeywordIntelligenceView({
   initialSearch = '',
 }: KeywordIntelligenceViewProps) {
   const [activeCategory, setActiveCategory] = useState<
-    'all' | 'primary' | 'secondary' | 'shortTail' | 'longTail' | 'questions' | 'opportunities' | 'clusters'
+    'all' | 'primary' | 'secondary' | 'shortTail' | 'longTail' | 'questions' | 'recommended' | 'opportunities' | 'clusters'
   >('all');
   const [selectedKeywordDetail, setSelectedKeywordDetail] = useState<KeywordItem | null>(null);
 
+  const recommendedList = keywords.recommended || [];
+  const primaryDetails = keywords.primaryKeywordDetails;
+
   const tabs = [
-    { id: 'all', label: `All Keywords (${keywords.all.length})`, icon: <Key size={15} /> },
+    { id: 'all', label: `All Extracted (${keywords.all.length})`, icon: <Key size={15} /> },
     { id: 'primary', label: `Primary (${keywords.primary.length})`, icon: <Star size={15} /> },
     { id: 'secondary', label: `Secondary (${keywords.secondary.length})`, icon: <Layers size={15} /> },
     { id: 'shortTail', label: `Short-Tail (${keywords.shortTail.length})`, icon: <Hash size={15} /> },
     { id: 'longTail', label: `Long-Tail (${keywords.longTail.length})`, icon: <Hash size={15} /> },
     { id: 'questions', label: `Questions (${keywords.questions.length})`, icon: <HelpCircle size={15} /> },
+    { id: 'recommended', label: `Recommended Targets (${recommendedList.length})`, icon: <Target size={15} /> },
     { id: 'opportunities', label: `Opportunities (${keywords.opportunities.length})`, icon: <Sparkles size={15} /> },
     { id: 'clusters', label: `Clusters & Entities (${keywords.clusters.length})`, icon: <Boxes size={15} /> },
   ];
@@ -68,13 +83,98 @@ export function KeywordIntelligenceView({
         return keywords.longTail;
       case 'questions':
         return keywords.questions;
+      case 'recommended':
+        return recommendedList;
       default:
         return keywords.all;
     }
-  }, [activeCategory, keywords]);
+  }, [activeCategory, keywords, recommendedList]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Primary Keyword Intelligence Banner */}
+      {primaryDetails && primaryDetails.keyword && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.05) 100%)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1.25rem 1.5rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  background: 'rgba(99, 102, 241, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--primary)',
+                }}
+              >
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                  Detected Primary Focus Topic
+                </div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  "{primaryDetails.keyword}"
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                padding: '0.4rem 0.85rem',
+                borderRadius: '20px',
+              }}
+            >
+              <Compass size={15} color="#10b981" />
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#10b981' }}>
+                Confidence: {primaryDetails.confidenceScore}%
+              </span>
+            </div>
+          </div>
+
+          {/* Evidence List */}
+          {primaryDetails.evidence && primaryDetails.evidence.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+              {primaryDetails.evidence.map((ev, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-secondary)',
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    padding: '0.25rem 0.6rem',
+                    borderRadius: '4px',
+                  }}
+                >
+                  <Check size={12} color="#10b981" />
+                  <span>{ev}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Category Navigation Bar */}
       <div
         style={{
@@ -127,6 +227,42 @@ export function KeywordIntelligenceView({
             if (found) setSelectedKeywordDetail(found);
           }}
         />
+      ) : activeCategory === 'recommended' && recommendedList.length === 0 ? (
+        <div
+          style={{
+            padding: '3.5rem 2rem',
+            background: 'var(--bg-surface)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-subtle)',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '0.85rem',
+          }}
+        >
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: 'rgba(99, 102, 241, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--primary)',
+            }}
+          >
+            <Info size={24} />
+          </div>
+          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+            No Synthetic Keyword Recommendations
+          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '520px', lineHeight: 1.6 }}>
+            {keywords.recommendationNotice ||
+              'Page contains insufficient topical depth to infer reliable secondary keyword opportunities without fabricating generic modifiers.'}
+          </div>
+        </div>
       ) : (
         <KeywordTable
           keywords={currentKeywordList}
@@ -135,7 +271,7 @@ export function KeywordIntelligenceView({
         />
       )}
 
-      {/* Keyword Detail Information Modal / Drawer */}
+      {/* Keyword Detail Information Modal */}
       {selectedKeywordDetail && (
         <div
           style={{
@@ -156,7 +292,7 @@ export function KeywordIntelligenceView({
               background: 'var(--bg-surface)',
               borderRadius: 'var(--radius-lg)',
               border: '1px solid var(--border-strong)',
-              maxWidth: '620px',
+              maxWidth: '640px',
               width: '100%',
               padding: '1.75rem',
               boxShadow: 'var(--shadow-lg)',
@@ -180,15 +316,25 @@ export function KeywordIntelligenceView({
                       textTransform: 'uppercase',
                       padding: '0.15rem 0.5rem',
                       borderRadius: '4px',
-                      background: 'rgba(99, 102, 241, 0.15)',
-                      color: 'var(--primary-hover)',
+                      background:
+                        selectedKeywordDetail.source === 'RECOMMENDED'
+                          ? 'rgba(59, 130, 246, 0.15)'
+                          : selectedKeywordDetail.source === 'COMPETITOR_GAP'
+                          ? 'rgba(168, 85, 247, 0.15)'
+                          : 'rgba(16, 185, 129, 0.15)',
+                      color:
+                        selectedKeywordDetail.source === 'RECOMMENDED'
+                          ? '#60a5fa'
+                          : selectedKeywordDetail.source === 'COMPETITOR_GAP'
+                          ? '#c084fc'
+                          : '#10b981',
                     }}
                   >
-                    {selectedKeywordDetail.category}
+                    {selectedKeywordDetail.source || 'EXTRACTED'}
                   </span>
                 </div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  N-Gram: {selectedKeywordDetail.nGramType} | Length: {selectedKeywordDetail.wordCount || selectedKeywordDetail.keyword.split(' ').length} words
+                  N-Gram: {selectedKeywordDetail.nGramType} | Quality Score: {selectedKeywordDetail.qualityScore ?? selectedKeywordDetail.overallScore}/100 | Estimated Intent: {selectedKeywordDetail.searchIntent || 'Informational'}
                 </div>
               </div>
               <button
@@ -199,10 +345,55 @@ export function KeywordIntelligenceView({
               </button>
             </div>
 
+            {/* Reason / Contextual Notes */}
+            {selectedKeywordDetail.reason && (
+              <div
+                style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  padding: '0.75rem 1rem',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-secondary)',
+                  borderLeft: '3px solid var(--primary)',
+                }}
+              >
+                <strong>Analysis Note:</strong> {selectedKeywordDetail.reason}
+              </div>
+            )}
+
+            {/* Evidence List for Recommendations */}
+            {selectedKeywordDetail.evidence && selectedKeywordDetail.evidence.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                  Semantic Evidence & Grounding
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {selectedKeywordDetail.evidence.map((ev, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontSize: '0.8rem',
+                        color: 'var(--text-secondary)',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        padding: '0.35rem 0.6rem',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      <Check size={13} color="#10b981" />
+                      <span>{ev}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Direct On-Page Extracted Signals (Category A) */}
             <div>
               <h4 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-                Directly Extracted On-Page Signals (Category A)
+                On-Page Relevance Signals (Category A)
               </h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem' }}>
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.6rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
@@ -214,8 +405,8 @@ export function KeywordIntelligenceView({
                   <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{selectedKeywordDetail.density}%</div>
                 </div>
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.6rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Prominence</div>
-                  <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{selectedKeywordDetail.prominenceScore}/100</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Quality Score</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{selectedKeywordDetail.qualityScore ?? selectedKeywordDetail.overallScore}/100</div>
                 </div>
               </div>
 
@@ -246,10 +437,10 @@ export function KeywordIntelligenceView({
             <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                 <h4 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                  External SEO Metrics (Category B)
+                  External Search Provider Metrics (Category B)
                 </h4>
                 <span style={{ fontSize: '0.7rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                  Requires Data Provider
+                  Requires Connected Provider
                 </span>
               </div>
 
@@ -267,8 +458,8 @@ export function KeywordIntelligenceView({
                   <div style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>External SEO data unavailable</div>
                 </div>
                 <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.5rem', borderRadius: '4px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Search Intent:</span>
-                  <div style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Requires SEO data provider</div>
+                  <span style={{ color: 'var(--text-muted)' }}>Estimated Intent:</span>
+                  <div style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>{selectedKeywordDetail.searchIntent || 'Informational'}</div>
                 </div>
               </div>
             </div>

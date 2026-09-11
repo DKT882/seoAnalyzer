@@ -117,7 +117,8 @@ export async function generateSeoReport(
     onPage,
     links,
     images,
-    fetchResult.finalUrl
+    fetchResult.finalUrl,
+    fetchResult.body
   );
 
   // 10. Extract Tag Explorer Element Data
