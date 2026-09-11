@@ -44,7 +44,7 @@ async function test() {
   console.log('Missing Topics count:', compData.report?.contentGap?.missingTopics?.length);
   console.log('Outrank Recommendations count:', compData.report?.outrankRecommendations?.length);
 
-  console.log('\nALL ENDPOINT TESTS PASSED SUCCESSFULLY!');
+  console.log('\nALDPOINT TESTS PASSED SUCCESSFULLY!');
 }
 
 test().catch(err => {

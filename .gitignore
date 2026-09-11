@@ -6,6 +6,8 @@ node_modules/
 # Production build outputs
 dist/
 build/
+.next/
+out/
 *.tsbuildinfo
 
 # SQLite databases and local data

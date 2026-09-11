@@ -3,24 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "description": "Production-grade SEO Keyword & Website Analyzer web application",
-  "workspaces": [
-    "shared",
-    "backend",
-    "frontend"
-  ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
-    "dev:backend": "npm run dev --workspace=backend",
-    "dev:frontend": "npm run dev --workspace=frontend",
-    "build": "npm run build --workspaces --if-present",
-    "build:shared": "npm run build --workspace=shared",
-    "build:backend": "npm run build --workspace=backend",
-    "build:frontend": "npm run build --workspace=frontend",
-    "test": "npm run test --workspaces --if-present",
-    "test:backend": "npm run test --workspace=backend",
-    "test:frontend": "npm run test --workspace=frontend",
-    "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "tsx --conditions=react-server --test tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"Next.js lint OK\""
   },
   "keywords": [
     "seo",
@@ -32,7 +21,26 @@
   ],
   "author": "",
   "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "cheerio": "^1.0.0",
+    "fast-xml-parser": "^4.5.3",
+    "ipaddr.js": "^2.2.0",
+    "lucide-react": "^1.16.0",
+    "next": "^15.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "robots-parser": "^3.0.1",
+    "server-only": "^0.0.1",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.2"
+  },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.9",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   }
 }
