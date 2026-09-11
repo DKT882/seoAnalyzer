@@ -2,23 +2,49 @@
 
 import { useState, useMemo } from 'react';
 import { KeywordItem } from '@/types';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { EnrichedKeyword, KeywordMarketData } from '@/lib/providers/seo/types';
+import {
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  TrendingUp,
+  Award,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
 import { getScoreColor } from '@/lib/utils/formatters';
+import { KeywordDetailModal } from './KeywordDetailModal';
 
 interface KeywordTableProps {
-  keywords: KeywordItem[];
+  keywords: (KeywordItem | EnrichedKeyword)[];
   initialSearch?: string;
-  onSelectKeyword?: (keyword: KeywordItem) => void;
+  onSelectKeyword?: (keyword: KeywordItem | EnrichedKeyword) => void;
 }
 
-type SortField = 'keyword' | 'frequency' | 'density' | 'prominenceScore' | 'overallScore' | 'qualityScore' | 'wordCount';
+type SortField =
+  | 'keyword'
+  | 'searchVolume'
+  | 'keywordDifficulty'
+  | 'cpc'
+  | 'relevance'
+  | 'opportunity'
+  | 'frequency';
+
 type SortOrder = 'asc' | 'desc';
 
 export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: KeywordTableProps) {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
-  const [sortField, setSortField] = useState<SortField>('overallScore');
+  const [selectedSourceFilter, setSelectedSourceFilter] = useState<string>('ALL');
+  const [selectedIntentFilter, setSelectedIntentFilter] = useState<string>('ALL');
+  const [selectedCoverageFilter, setSelectedCoverageFilter] = useState<string>('ALL');
+  const [sortField, setSortField] = useState<SortField>('opportunity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [activeModalKeyword, setActiveModalKeyword] = useState<KeywordItem | EnrichedKeyword | null>(null);
   const pageSize = 20;
 
   const handleSort = (field: SortField) => {
@@ -34,39 +60,103 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
   const filteredAndSortedKeywords = useMemo(() => {
     let result = [...keywords];
 
+    // Text Search
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase().trim();
-      result = result.filter(
-        (k) =>
-          k.keyword.toLowerCase().includes(q) ||
-          k.category.toLowerCase().includes(q) ||
-          (k.source && k.source.toLowerCase().includes(q)) ||
-          (k.searchIntent && k.searchIntent.toLowerCase().includes(q)) ||
-          (k.semanticCategory && k.semanticCategory.toLowerCase().includes(q)) ||
-          (k.topicCluster && k.topicCluster.toLowerCase().includes(q))
-      );
+      result = result.filter((item) => {
+        const kw = item.keyword.toLowerCase();
+        const isEnriched = 'internalMetrics' in item;
+        const enriched = isEnriched ? (item as EnrichedKeyword) : null;
+        const standard = !isEnriched ? (item as KeywordItem) : null;
+        const intent = (enriched?.internalMetrics?.estimatedIntent || standard?.searchIntent || '').toLowerCase();
+        const cat = item.category.toLowerCase();
+        return kw.includes(q) || intent.includes(q) || cat.includes(q);
+      });
     }
 
+    // Source Filter
+    if (selectedSourceFilter !== 'ALL') {
+      result = result.filter((item) => {
+        const isEnriched = 'internalMetrics' in item;
+        const sources = isEnriched
+          ? (item as EnrichedKeyword).sources
+          : [(item as KeywordItem).source || 'EXTRACTED'];
+        return sources.includes(selectedSourceFilter as any);
+      });
+    }
+
+    // Intent Filter
+    if (selectedIntentFilter !== 'ALL') {
+      result = result.filter((item) => {
+        const isEnriched = 'internalMetrics' in item;
+        const intent = isEnriched
+          ? (item as EnrichedKeyword).internalMetrics.estimatedIntent
+          : (item as KeywordItem).searchIntent;
+        return intent === selectedIntentFilter;
+      });
+    }
+
+    // Coverage Filter
+    if (selectedCoverageFilter !== 'ALL') {
+      result = result.filter((item) => {
+        const isEnriched = 'internalMetrics' in item;
+        const coverage = isEnriched
+          ? (item as EnrichedKeyword).internalMetrics.coverageStatus
+          : (item as KeywordItem).inTitle || (item as KeywordItem).inH1
+          ? 'Strong'
+          : 'Weak';
+        return coverage === selectedCoverageFilter;
+      });
+    }
+
+    // Sorting
     result.sort((a, b) => {
-      let valA: any = a[sortField];
-      let valB: any = b[sortField];
+      const isEnrichedA = 'internalMetrics' in a;
+      const isEnrichedB = 'internalMetrics' in b;
+      const enA = isEnrichedA ? (a as EnrichedKeyword) : null;
+      const enB = isEnrichedB ? (b as EnrichedKeyword) : null;
+      const stA = !isEnrichedA ? (a as KeywordItem) : null;
+      const stB = !isEnrichedB ? (b as KeywordItem) : null;
 
-      if (sortField === 'wordCount') {
-        valA = a.wordCount || a.keyword.split(' ').length;
-        valB = b.wordCount || b.keyword.split(' ').length;
-      } else if (sortField === 'qualityScore') {
-        valA = a.qualityScore ?? a.overallScore;
-        valB = b.qualityScore ?? b.overallScore;
+      let valA: any = 0;
+      let valB: any = 0;
+
+      switch (sortField) {
+        case 'keyword':
+          valA = a.keyword;
+          valB = b.keyword;
+          return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case 'searchVolume':
+          valA = enA?.marketData?.searchVolume ?? -1;
+          valB = enB?.marketData?.searchVolume ?? -1;
+          break;
+        case 'keywordDifficulty':
+          valA = enA?.marketData?.keywordDifficulty ?? -1;
+          valB = enB?.marketData?.keywordDifficulty ?? -1;
+          break;
+        case 'cpc':
+          valA = enA?.marketData?.cpc ?? -1;
+          valB = enB?.marketData?.cpc ?? -1;
+          break;
+        case 'relevance':
+          valA = enA?.internalMetrics?.relevanceScore ?? stA?.overallScore ?? 0;
+          valB = enB?.internalMetrics?.relevanceScore ?? stB?.overallScore ?? 0;
+          break;
+        case 'opportunity':
+          valA = enA?.opportunityScore?.finalScore ?? stA?.overallScore ?? 0;
+          valB = enB?.opportunityScore?.finalScore ?? stB?.overallScore ?? 0;
+          break;
+        case 'frequency':
+          valA = enA?.internalMetrics?.frequency ?? stA?.frequency ?? 0;
+          valB = enB?.internalMetrics?.frequency ?? stB?.frequency ?? 0;
+          break;
       }
 
-      if (typeof valA === 'string') {
-        return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      }
-      return sortOrder === 'asc' ? (valA ?? 0) - (valB ?? 0) : (valB ?? 0) - (valA ?? 0);
+      return sortOrder === 'asc' ? valA - valB : valB - valA;
     });
 
     return result;
-  }, [keywords, searchTerm, sortField, sortOrder]);
+  }, [keywords, searchTerm, selectedSourceFilter, selectedIntentFilter, selectedCoverageFilter, sortField, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedKeywords.length / pageSize));
   const paginatedKeywords = useMemo(() => {
@@ -76,18 +166,26 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
 
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown size={13} style={{ opacity: 0.4 }} />;
-    return sortOrder === 'asc' ? <ArrowUp size={13} color="var(--primary)" /> : <ArrowDown size={13} color="var(--primary)" />;
+    return sortOrder === 'asc' ? <ArrowUp size={13} color="#818cf8" /> : <ArrowDown size={13} color="#818cf8" />;
+  };
+
+  const handleInspect = (item: KeywordItem | EnrichedKeyword) => {
+    setActiveModalKeyword(item);
+    if (onSelectKeyword) {
+      onSelectKeyword(item);
+    }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {/* Search and summary controls */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ position: 'relative', width: '320px', maxWidth: '100%' }}>
-          <Search size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+      {/* Controls & Multi-Filters */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+        {/* Search */}
+        <div style={{ position: 'relative', width: '280px', maxWidth: '100%' }}>
+          <Search size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
           <input
             type="text"
-            placeholder="Search keywords, intent, clusters..."
+            placeholder="Search keywords, intent..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -95,271 +193,369 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
             }}
             style={{
               width: '100%',
-              padding: '0.55rem 1rem 0.55rem 2.3rem',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-primary)',
-              fontSize: '0.85rem',
+              padding: '0.5rem 1rem 0.5rem 2.3rem',
+              borderRadius: '8px',
+              background: '#0f172a',
+              border: '1px solid #334155',
+              color: '#f8fafc',
+              fontSize: '0.82rem',
             }}
           />
         </div>
 
-        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-          Showing <strong>{filteredAndSortedKeywords.length}</strong> keywords
+        {/* Filters */}
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Source Filter */}
+          <select
+            value={selectedSourceFilter}
+            onChange={(e) => {
+              setSelectedSourceFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#cbd5e1',
+              fontSize: '0.78rem',
+            }}
+          >
+            <option value="ALL">All Sources</option>
+            <option value="EXTRACTED">Extracted</option>
+            <option value="RECOMMENDED">Recommended</option>
+            <option value="COMPETITOR_GAP">Competitor Gap</option>
+            <option value="EXTERNAL">External</option>
+          </select>
+
+          {/* Intent Filter */}
+          <select
+            value={selectedIntentFilter}
+            onChange={(e) => {
+              setSelectedIntentFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#cbd5e1',
+              fontSize: '0.78rem',
+            }}
+          >
+            <option value="ALL">All Intents</option>
+            <option value="Informational">Informational</option>
+            <option value="Commercial">Commercial</option>
+            <option value="Transactional">Transactional</option>
+            <option value="Navigational">Navigational</option>
+          </select>
+
+          {/* Coverage Filter */}
+          <select
+            value={selectedCoverageFilter}
+            onChange={(e) => {
+              setSelectedCoverageFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#cbd5e1',
+              fontSize: '0.78rem',
+            }}
+          >
+            <option value="ALL">All Coverage</option>
+            <option value="Strong">Strong</option>
+            <option value="Weak">Weak</option>
+            <option value="Missing">Missing</option>
+          </select>
+
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginLeft: '0.25rem' }}>
+            ({filteredAndSortedKeywords.length} terms)
+          </span>
         </div>
       </div>
 
       {/* Keywords Table */}
-      <div style={{ overflowX: 'auto', background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+      <div style={{ overflowX: 'auto', background: '#0f172a', borderRadius: '12px', border: '1px solid #1e293b' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
           <thead>
-            <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-subtle)' }}>
+            <tr style={{ background: 'rgba(30, 41, 59, 0.7)', borderBottom: '1px solid #334155' }}>
               <th
                 onClick={() => handleSort('keyword')}
-                style={{ padding: '0.85rem 1rem', cursor: 'pointer', userSelect: 'none', color: 'var(--text-secondary)', fontWeight: 600 }}
+                style={{ padding: '0.8rem 1rem', cursor: 'pointer', userSelect: 'none', color: '#94a3b8', fontWeight: 600 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   Keyword {renderSortIcon('keyword')}
                 </div>
               </th>
-              <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                Source
-              </th>
-              <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                Category
-              </th>
+              <th style={{ padding: '0.8rem 0.75rem', color: '#94a3b8', fontWeight: 600 }}>Source</th>
+              <th style={{ padding: '0.8rem 0.75rem', color: '#94a3b8', fontWeight: 600 }}>Intent</th>
               <th
-                onClick={() => handleSort('frequency')}
-                style={{ padding: '0.85rem 1rem', cursor: 'pointer', userSelect: 'none', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}
+                onClick={() => handleSort('searchVolume')}
+                style={{ padding: '0.8rem 0.75rem', cursor: 'pointer', userSelect: 'none', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}
+                title="Monthly Search Volume (DataForSEO / Google Ads)"
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  Freq {renderSortIcon('frequency')}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem' }}>
+                  <TrendingUp size={12} className="text-emerald-400" /> Vol {renderSortIcon('searchVolume')}
                 </div>
               </th>
               <th
-                onClick={() => handleSort('density')}
-                style={{ padding: '0.85rem 1rem', cursor: 'pointer', userSelect: 'none', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}
+                onClick={() => handleSort('keywordDifficulty')}
+                style={{ padding: '0.8rem 0.75rem', cursor: 'pointer', userSelect: 'none', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}
+                title="Keyword Difficulty (0-100)"
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  Density {renderSortIcon('density')}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
+                  <Award size={12} className="text-amber-400" /> KD {renderSortIcon('keywordDifficulty')}
                 </div>
               </th>
               <th
-                onClick={() => handleSort('prominenceScore')}
-                style={{ padding: '0.85rem 1rem', cursor: 'pointer', userSelect: 'none', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}
+                onClick={() => handleSort('cpc')}
+                style={{ padding: '0.8rem 0.75rem', cursor: 'pointer', userSelect: 'none', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  Prominence {renderSortIcon('prominenceScore')}
-                </div>
-              </th>
-              <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                Placements
-              </th>
-              <th
-                onClick={() => handleSort('qualityScore')}
-                style={{ padding: '0.85rem 1rem', cursor: 'pointer', userSelect: 'none', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  Quality {renderSortIcon('qualityScore')}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem' }}>
+                  CPC {renderSortIcon('cpc')}
                 </div>
               </th>
               <th
-                onClick={() => handleSort('overallScore')}
-                style={{ padding: '0.85rem 1rem', cursor: 'pointer', userSelect: 'none', textAlign: 'right', color: 'var(--text-secondary)', fontWeight: 600 }}
+                onClick={() => handleSort('relevance')}
+                style={{ padding: '0.8rem 0.75rem', cursor: 'pointer', userSelect: 'none', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.35rem' }}>
-                  SEO Score {renderSortIcon('overallScore')}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
+                  Relevance {renderSortIcon('relevance')}
                 </div>
               </th>
+              <th style={{ padding: '0.8rem 0.75rem', color: '#94a3b8', fontWeight: 600, textAlign: 'center' }}>
+                Coverage
+              </th>
+              <th
+                onClick={() => handleSort('opportunity')}
+                style={{ padding: '0.8rem 1rem', cursor: 'pointer', userSelect: 'none', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}
+                title="SEO Opportunity Score (Transparent combination of internal relevance, content gap, and market demand)"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem' }}>
+                  <Zap size={12} className="text-indigo-400" /> Opp Score {renderSortIcon('opportunity')}
+                </div>
+              </th>
+              <th style={{ padding: '0.8rem 0.75rem', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {paginatedKeywords.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                  No keywords match the current filter.
+                <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                  No keywords match the selected filters.
                 </td>
               </tr>
             ) : (
               paginatedKeywords.map((item) => {
-                const { color } = getScoreColor(item.overallScore);
-                const isRecommended = item.source === 'RECOMMENDED';
-                const source = item.source || 'EXTRACTED';
+                const isEnriched = 'internalMetrics' in item;
+                const enriched = isEnriched ? (item as EnrichedKeyword) : null;
+                const standard = !isEnriched ? (item as KeywordItem) : null;
+
+                const kw = item.keyword;
+                const sources = enriched?.sources || (standard?.source ? [standard.source] : ['EXTRACTED']);
+                const intent = enriched?.internalMetrics?.estimatedIntent || standard?.searchIntent || 'Informational';
+                const marketData: KeywordMarketData | null = enriched?.marketData || null;
+
+                const relevance = enriched?.internalMetrics?.relevanceScore ?? standard?.overallScore ?? standard?.prominenceScore ?? 50;
+                const oppScore = enriched?.opportunityScore?.finalScore ?? standard?.overallScore ?? 50;
+                const coverage = enriched?.internalMetrics?.coverageStatus ?? (standard?.inTitle || standard?.inH1 ? 'Strong' : 'Weak');
+                const { color } = getScoreColor(oppScore);
 
                 return (
                   <tr
-                    key={item.id || item.keyword}
-                    onClick={() => onSelectKeyword && onSelectKeyword(item)}
+                    key={kw}
+                    onClick={() => handleInspect(item)}
                     style={{
-                      borderBottom: '1px solid var(--border-subtle)',
-                      cursor: onSelectKeyword ? 'pointer' : 'default',
+                      borderBottom: '1px solid #1e293b',
+                      cursor: 'pointer',
                       transition: 'background 0.15s ease',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(51, 65, 85, 0.3)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    {/* Keyword Name */}
-                    <td style={{ padding: '0.85rem 1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span>{item.keyword}</span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', background: 'rgba(255, 255, 255, 0.04)', padding: '0.1rem 0.35rem', borderRadius: '3px' }}>
-                          {item.nGramType}
-                        </span>
+                    {/* Keyword */}
+                    <td style={{ padding: '0.8rem 1rem', fontWeight: 600, color: '#f8fafc' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <span>{kw}</span>
                       </div>
                     </td>
 
-                    {/* Source */}
-                    <td style={{ padding: '0.85rem 1rem' }}>
+                    {/* Source Badges */}
+                    <td style={{ padding: '0.8rem 0.75rem' }}>
+                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        {sources.map((src) => (
+                          <span
+                            key={src}
+                            style={{
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              padding: '0.12rem 0.4rem',
+                              borderRadius: '4px',
+                              background:
+                                src === 'RECOMMENDED'
+                                  ? 'rgba(168, 85, 247, 0.15)'
+                                  : src === 'COMPETITOR_GAP'
+                                  ? 'rgba(245, 158, 11, 0.15)'
+                                  : src === 'EXTERNAL'
+                                  ? 'rgba(16, 185, 129, 0.15)'
+                                  : 'rgba(59, 130, 246, 0.15)',
+                              color:
+                                src === 'RECOMMENDED'
+                                  ? '#c084fc'
+                                  : src === 'COMPETITOR_GAP'
+                                  ? '#fbbf24'
+                                  : src === 'EXTERNAL'
+                                  ? '#34d399'
+                                  : '#60a5fa',
+                              border: `1px solid ${
+                                src === 'RECOMMENDED'
+                                  ? 'rgba(168, 85, 247, 0.3)'
+                                  : src === 'COMPETITOR_GAP'
+                                  ? 'rgba(245, 158, 11, 0.3)'
+                                  : src === 'EXTERNAL'
+                                  ? 'rgba(16, 185, 129, 0.3)'
+                                  : 'rgba(59, 130, 246, 0.3)'
+                              }`,
+                            }}
+                          >
+                            {src.replace('_', ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+
+                    {/* Intent */}
+                    <td style={{ padding: '0.8rem 0.75rem', color: '#cbd5e1', fontSize: '0.78rem' }}>
                       <span
                         style={{
-                          fontSize: '0.68rem',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
                           padding: '0.15rem 0.45rem',
                           borderRadius: '4px',
                           background:
-                            source === 'RECOMMENDED'
-                              ? 'rgba(59, 130, 246, 0.15)'
-                              : source === 'EXTERNAL'
-                              ? 'rgba(245, 158, 11, 0.15)'
-                              : 'rgba(16, 185, 129, 0.15)',
-                          color:
-                            source === 'RECOMMENDED'
-                              ? '#60a5fa'
-                              : source === 'EXTERNAL'
-                              ? '#f59e0b'
-                              : '#10b981',
-                          border: `1px solid ${
-                            source === 'RECOMMENDED'
-                              ? 'rgba(59, 130, 246, 0.3)'
-                              : source === 'EXTERNAL'
-                              ? 'rgba(245, 158, 11, 0.3)'
-                              : 'rgba(16, 185, 129, 0.3)'
-                          }`,
+                            intent === 'Commercial' || intent === 'Transactional'
+                              ? 'rgba(99, 102, 241, 0.15)'
+                              : 'rgba(255, 255, 255, 0.05)',
+                          color: intent === 'Commercial' || intent === 'Transactional' ? '#a5b4fc' : '#94a3b8',
                         }}
                       >
-                        {source}
+                        {intent}
                       </span>
                     </td>
 
-                    {/* Category */}
-                    <td style={{ padding: '0.85rem 1rem' }}>
-                      <span
-                        style={{
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          padding: '0.15rem 0.5rem',
-                          borderRadius: '4px',
-                          background: item.category === 'primary' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                          color: item.category === 'primary' ? 'var(--primary-hover)' : 'var(--text-secondary)',
-                          border: item.category === 'primary' ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid var(--border-subtle)',
-                        }}
-                      >
-                        {item.category}
-                      </span>
-                    </td>
-
-                    {/* Frequency */}
-                    <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {item.frequency}x
-                    </td>
-
-                    {/* Density */}
-                    <td style={{ padding: '0.85rem 1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                      {item.density}%
-                    </td>
-
-                    {/* Prominence */}
-                    <td style={{ padding: '0.85rem 1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                      {item.prominenceScore}/100
-                    </td>
-
-                    {/* Key Placements */}
-                    <td style={{ padding: '0.85rem 1rem' }}>
-                      {isRecommended ? (
-                        <span style={{ fontSize: '0.75rem', color: '#60a5fa', fontStyle: 'italic' }}>
-                          Target Placement
-                        </span>
+                    {/* Monthly Search Volume */}
+                    <td style={{ padding: '0.8rem 0.75rem', textAlign: 'right', fontWeight: 600 }}>
+                      {marketData && typeof marketData.searchVolume === 'number' ? (
+                        <span style={{ color: '#34d399' }}>{marketData.searchVolume.toLocaleString()}</span>
                       ) : (
-                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                          <span
-                            title="Title Tag"
-                            style={{
-                              fontSize: '0.68rem',
-                              padding: '0.1rem 0.35rem',
-                              borderRadius: '3px',
-                              background: item.inTitle ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                              color: item.inTitle ? '#10b981' : 'var(--text-muted)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.2rem',
-                            }}
-                          >
-                            {item.inTitle ? <Check size={10} /> : <X size={10} />} Title
-                          </span>
-                          <span
-                            title="H1 Headline"
-                            style={{
-                              fontSize: '0.68rem',
-                              padding: '0.1rem 0.35rem',
-                              borderRadius: '3px',
-                              background: item.inH1 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                              color: item.inH1 ? '#10b981' : 'var(--text-muted)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.2rem',
-                            }}
-                          >
-                            {item.inH1 ? <Check size={10} /> : <X size={10} />} H1
-                          </span>
-                          <span
-                            title="H2-H6 Subheadings"
-                            style={{
-                              fontSize: '0.68rem',
-                              padding: '0.1rem 0.35rem',
-                              borderRadius: '3px',
-                              background: item.inH2H6 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                              color: item.inH2H6 ? '#10b981' : 'var(--text-muted)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.2rem',
-                            }}
-                          >
-                            {item.inH2H6 ? <Check size={10} /> : <X size={10} />} H2-6
-                          </span>
-                          <span
-                            title="Meta Description"
-                            style={{
-                              fontSize: '0.68rem',
-                              padding: '0.1rem 0.35rem',
-                              borderRadius: '3px',
-                              background: item.inMeta ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                              color: item.inMeta ? '#10b981' : 'var(--text-muted)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.2rem',
-                            }}
-                          >
-                            {item.inMeta ? <Check size={10} /> : <X size={10} />} Meta
-                          </span>
-                        </div>
+                        <span title="External market data unavailable without configured provider" style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                          N/A
+                        </span>
                       )}
                     </td>
 
-                    {/* Quality Score */}
-                    <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.85rem' }}>
-                        {item.qualityScore ?? item.overallScore}/100
+                    {/* KD */}
+                    <td style={{ padding: '0.8rem 0.75rem', textAlign: 'center' }}>
+                      {marketData && typeof marketData.keywordDifficulty === 'number' ? (
+                        <span
+                          style={{
+                            fontWeight: 700,
+                            padding: '0.1rem 0.4rem',
+                            borderRadius: '4px',
+                            background:
+                              marketData.keywordDifficulty <= 35
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : marketData.keywordDifficulty <= 65
+                                ? 'rgba(245, 158, 11, 0.15)'
+                                : 'rgba(239, 68, 68, 0.15)',
+                            color:
+                              marketData.keywordDifficulty <= 35
+                                ? '#34d399'
+                                : marketData.keywordDifficulty <= 65
+                                ? '#fbbf24'
+                                : '#f87171',
+                          }}
+                        >
+                          {marketData.keywordDifficulty}
+                        </span>
+                      ) : (
+                        <span title="External KD unavailable" style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                          N/A
+                        </span>
+                      )}
+                    </td>
+
+                    {/* CPC */}
+                    <td style={{ padding: '0.8rem 0.75rem', textAlign: 'right', color: '#94a3b8' }}>
+                      {marketData && typeof marketData.cpc === 'number' ? (
+                        `$${marketData.cpc.toFixed(2)}`
+                      ) : (
+                        <span style={{ color: '#64748b', fontSize: '0.75rem' }}>N/A</span>
+                      )}
+                    </td>
+
+                    {/* Internal Relevance */}
+                    <td style={{ padding: '0.8rem 0.75rem', textAlign: 'center', color: '#e2e8f0', fontWeight: 600 }}>
+                      {relevance}/100
+                    </td>
+
+                    {/* Coverage */}
+                    <td style={{ padding: '0.8rem 0.75rem', textAlign: 'center' }}>
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          padding: '0.12rem 0.4rem',
+                          borderRadius: '4px',
+                          background:
+                            coverage === 'Strong'
+                              ? 'rgba(16, 185, 129, 0.15)'
+                              : coverage === 'Weak'
+                              ? 'rgba(245, 158, 11, 0.15)'
+                              : 'rgba(168, 85, 247, 0.15)',
+                          color:
+                            coverage === 'Strong'
+                              ? '#34d399'
+                              : coverage === 'Weak'
+                              ? '#fbbf24'
+                              : '#c084fc',
+                        }}
+                      >
+                        {coverage}
                       </span>
                     </td>
 
-                    {/* Overall Score */}
-                    <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
-                      <span style={{ fontWeight: 800, color, fontFamily: 'var(--font-heading)', fontSize: '0.95rem' }}>
-                        {item.overallScore}
-                      </span>
+                    {/* Opportunity Score */}
+                    <td style={{ padding: '0.8rem 1rem', textAlign: 'right' }}>
+                      <span style={{ fontWeight: 800, color, fontSize: '0.95rem' }}>{oppScore}</span>
+                    </td>
+
+                    {/* Action Button */}
+                    <td style={{ padding: '0.8rem 0.75rem', textAlign: 'center' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleInspect(item);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          padding: '0.3rem 0.6rem',
+                          borderRadius: '6px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          color: '#818cf8',
+                          fontSize: '0.72rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Eye size={12} /> Inspect
+                      </button>
                     </td>
                   </tr>
                 );
@@ -372,7 +568,7 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
       {/* Pagination Controls */}
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
             Page {currentPage} of {totalPages}
           </span>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -384,12 +580,12 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
                 alignItems: 'center',
                 gap: '0.25rem',
                 padding: '0.4rem 0.75rem',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-subtle)',
-                color: currentPage === 1 ? 'var(--text-muted)' : 'var(--text-primary)',
+                borderRadius: '6px',
+                background: '#1e293b',
+                border: '1px solid #334155',
+                color: currentPage === 1 ? '#64748b' : '#f8fafc',
                 cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
               }}
             >
               <ChevronLeft size={14} /> Prev
@@ -402,18 +598,23 @@ export function KeywordTable({ keywords, initialSearch = '', onSelectKeyword }: 
                 alignItems: 'center',
                 gap: '0.25rem',
                 padding: '0.4rem 0.75rem',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-subtle)',
-                color: currentPage === totalPages ? 'var(--text-muted)' : 'var(--text-primary)',
+                borderRadius: '6px',
+                background: '#1e293b',
+                border: '1px solid #334155',
+                color: currentPage === totalPages ? '#64748b' : '#f8fafc',
                 cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
               }}
             >
               Next <ChevronRight size={14} />
             </button>
           </div>
         </div>
+      )}
+
+      {/* Keyword Detail Modal */}
+      {activeModalKeyword && (
+        <KeywordDetailModal keywordItem={activeModalKeyword} onClose={() => setActiveModalKeyword(null)} />
       )}
     </div>
   );

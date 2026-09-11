@@ -144,5 +144,49 @@ function initSchema(db: Database.Database): void {
       report_json TEXT,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS seo_provider_cache (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      cache_key TEXT NOT NULL UNIQUE,
+      payload TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS keyword_market_data (
+      id TEXT PRIMARY KEY,
+      keyword TEXT NOT NULL,
+      country TEXT NOT NULL,
+      language TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      search_volume INTEGER,
+      keyword_difficulty REAL,
+      cpc REAL,
+      competition REAL,
+      serp_features TEXT,
+      top_competitors TEXT,
+      volume_trend TEXT,
+      updated_at TEXT NOT NULL,
+      UNIQUE(keyword, country, language, provider)
+    );
+
+    CREATE TABLE IF NOT EXISTS serp_results (
+      id TEXT PRIMARY KEY,
+      keyword TEXT NOT NULL,
+      country TEXT NOT NULL,
+      language TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      total_results INTEGER,
+      items_json TEXT NOT NULL,
+      features_json TEXT,
+      competitor_domains_json TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(keyword, country, language, provider)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_kmd_lookup ON keyword_market_data(keyword, country, language);
+    CREATE INDEX IF NOT EXISTS idx_serp_lookup ON serp_results(keyword, country, language);
+    CREATE INDEX IF NOT EXISTS idx_provider_cache ON seo_provider_cache(cache_key);
   `);
 }

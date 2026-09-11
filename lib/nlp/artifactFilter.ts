@@ -213,3 +213,6 @@ export function isArtifactOrGarbage(phrase: string): boolean {
 
   return false;
 }
+
+export const isStructuralArtifact = isArtifactOrGarbage;
+

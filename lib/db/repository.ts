@@ -492,3 +492,205 @@ export const crawlRepository = {
   },
 };
 
+export const seoProviderRepository = {
+  getCache<T = any>(provider: string, cacheKey: string): T | null {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    const row = db.prepare(`
+      SELECT payload FROM seo_provider_cache
+      WHERE provider = ? AND cache_key = ? AND expires_at > ?
+    `).get(provider, cacheKey, now) as { payload?: string } | undefined;
+
+    if (!row || !row.payload) return null;
+    try {
+      return JSON.parse(row.payload) as T;
+    } catch {
+      return null;
+    }
+  },
+
+  setCache(provider: string, cacheKey: string, payload: any, ttlSeconds = 86400 * 7): void {
+    const db = getDatabase();
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+    const payloadStr = JSON.stringify(payload);
+
+    db.prepare(`
+      INSERT INTO seo_provider_cache (id, provider, cache_key, payload, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(cache_key) DO UPDATE SET
+        payload = excluded.payload,
+        created_at = excluded.created_at,
+        expires_at = excluded.expires_at
+    `).run(id, provider, cacheKey, payloadStr, createdAt, expiresAt);
+  },
+
+  getMarketData(keyword: string, country = 'US', language = 'en'): any | null {
+    const db = getDatabase();
+    const kw = keyword.toLowerCase().trim();
+    const row = db.prepare(`
+      SELECT * FROM keyword_market_data
+      WHERE keyword = ? AND country = ? AND language = ?
+    `).get(kw, country, language) as any;
+
+    if (!row) return null;
+
+    return {
+      keyword: row.keyword,
+      source: 'EXTERNAL',
+      country: row.country,
+      language: row.language,
+      searchVolume: row.search_volume,
+      keywordDifficulty: row.keyword_difficulty,
+      cpc: row.cpc,
+      competition: row.competition,
+      serpFeatures: row.serp_features ? JSON.parse(row.serp_features) : null,
+      topCompetitorDomains: row.top_competitors ? JSON.parse(row.top_competitors) : null,
+      volumeTrend: row.volume_trend ? JSON.parse(row.volume_trend) : null,
+      dataTimestamp: row.updated_at,
+      provider: row.provider,
+      providerStatus: 'CONNECTED',
+    };
+  },
+
+  getBulkMarketData(keywords: string[], country = 'US', language = 'en'): Map<string, any> {
+    const db = getDatabase();
+    const map = new Map<string, any>();
+    if (keywords.length === 0) return map;
+
+    const normalized = Array.from(new Set(keywords.map((k) => k.toLowerCase().trim()))).filter(Boolean);
+    const placeholders = normalized.map(() => '?').join(',');
+
+    const rows = db.prepare(`
+      SELECT * FROM keyword_market_data
+      WHERE country = ? AND language = ? AND keyword IN (${placeholders})
+    `).all(country, language, ...normalized) as any[];
+
+    for (const row of rows) {
+      map.set(row.keyword, {
+        keyword: row.keyword,
+        source: 'EXTERNAL',
+        country: row.country,
+        language: row.language,
+        searchVolume: row.search_volume,
+        keywordDifficulty: row.keyword_difficulty,
+        cpc: row.cpc,
+        competition: row.competition,
+        serpFeatures: row.serp_features ? JSON.parse(row.serp_features) : null,
+        topCompetitorDomains: row.top_competitors ? JSON.parse(row.top_competitors) : null,
+        volumeTrend: row.volume_trend ? JSON.parse(row.volume_trend) : null,
+        dataTimestamp: row.updated_at,
+        provider: row.provider,
+        providerStatus: 'CONNECTED',
+      });
+    }
+
+    return map;
+  },
+
+  saveMarketData(dataList: any[]): void {
+    if (dataList.length === 0) return;
+    const db = getDatabase();
+
+    const insertTx = db.transaction(() => {
+      const stmt = db.prepare(`
+        INSERT INTO keyword_market_data (
+          id, keyword, country, language, provider, search_volume, keyword_difficulty,
+          cpc, competition, serp_features, top_competitors, volume_trend, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(keyword, country, language, provider) DO UPDATE SET
+          search_volume = excluded.search_volume,
+          keyword_difficulty = excluded.keyword_difficulty,
+          cpc = excluded.cpc,
+          competition = excluded.competition,
+          serp_features = excluded.serp_features,
+          top_competitors = excluded.top_competitors,
+          volume_trend = excluded.volume_trend,
+          updated_at = excluded.updated_at
+      `);
+
+      for (const item of dataList) {
+        if (!item?.keyword) continue;
+        const id = crypto.randomUUID();
+        const kw = String(item.keyword).toLowerCase().trim();
+        const updatedAt = item.dataTimestamp || new Date().toISOString();
+
+        stmt.run(
+          id,
+          kw,
+          item.country || 'US',
+          item.language || 'en',
+          item.provider || 'DataForSEO',
+          item.searchVolume !== undefined ? item.searchVolume : null,
+          item.keywordDifficulty !== undefined ? item.keywordDifficulty : null,
+          item.cpc !== undefined ? item.cpc : null,
+          item.competition !== undefined ? item.competition : null,
+          item.serpFeatures ? JSON.stringify(item.serpFeatures) : null,
+          item.topCompetitorDomains ? JSON.stringify(item.topCompetitorDomains) : null,
+          item.volumeTrend ? JSON.stringify(item.volumeTrend) : null,
+          updatedAt
+        );
+      }
+    });
+
+    insertTx();
+  },
+
+  getSerpData(keyword: string, country = 'US', language = 'en'): any | null {
+    const db = getDatabase();
+    const kw = keyword.toLowerCase().trim();
+    const row = db.prepare(`
+      SELECT * FROM serp_results
+      WHERE keyword = ? AND country = ? AND language = ?
+    `).get(kw, country, language) as any;
+
+    if (!row) return null;
+
+    return {
+      keyword: row.keyword,
+      country: row.country,
+      language: row.language,
+      totalResults: row.total_results,
+      items: row.items_json ? JSON.parse(row.items_json) : [],
+      features: row.features_json ? JSON.parse(row.features_json) : [],
+      competitorDomains: row.competitor_domains_json ? JSON.parse(row.competitor_domains_json) : [],
+      dataTimestamp: row.created_at,
+      provider: row.provider,
+    };
+  },
+
+  saveSerpData(serp: any): void {
+    if (!serp?.keyword) return;
+    const db = getDatabase();
+    const id = crypto.randomUUID();
+    const kw = String(serp.keyword).toLowerCase().trim();
+    const createdAt = serp.dataTimestamp || new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO serp_results (
+        id, keyword, country, language, provider, total_results,
+        items_json, features_json, competitor_domains_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(keyword, country, language, provider) DO UPDATE SET
+        total_results = excluded.total_results,
+        items_json = excluded.items_json,
+        features_json = excluded.features_json,
+        competitor_domains_json = excluded.competitor_domains_json,
+        created_at = excluded.created_at
+    `).run(
+      id,
+      kw,
+      serp.country || 'US',
+      serp.language || 'en',
+      serp.provider || 'DataForSEO',
+      serp.totalResults || null,
+      JSON.stringify(serp.items || []),
+      JSON.stringify(serp.features || []),
+      JSON.stringify(serp.competitorDomains || []),
+      createdAt
+    );
+  },
+};
+
+

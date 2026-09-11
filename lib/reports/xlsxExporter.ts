@@ -642,3 +642,68 @@ export function generateWebsiteExcelWorkbook(
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
+export function generateEnrichedExcelWorkbook(
+  report: SEOReport,
+  marketDataList?: any[],
+  serpDataList?: any[]
+): Buffer {
+  const wb = XLSX.utils.book_new();
+
+  const setCols = (ws: XLSX.WorkSheet, colWidths: number[]) => {
+    ws['!cols'] = colWidths.map((w) => ({ wch: w }));
+  };
+
+  // Base sheets
+  const baseBuffer = generateExcelWorkbook(report);
+  const baseWb = XLSX.read(baseBuffer, { type: 'buffer' });
+  for (const name of baseWb.SheetNames) {
+    XLSX.utils.book_append_sheet(wb, baseWb.Sheets[name], name);
+  }
+
+  // 29. Keyword Market Data (if provided)
+  if (marketDataList && marketDataList.length > 0) {
+    const marketRows = [
+      ['Keyword', 'Provider', 'Country', 'Language', 'Search Volume', 'Keyword Difficulty', 'Estimated CPC ($)', 'Competition Index', 'Retrieved At'],
+      ...marketDataList.map((m) => [
+        m.keyword,
+        m.provider || 'DataForSEO',
+        m.country || 'US',
+        m.language || 'en',
+        m.searchVolume ?? 'N/A',
+        m.keywordDifficulty ?? 'N/A',
+        m.cpc !== null && m.cpc !== undefined ? `$${Number(m.cpc).toFixed(2)}` : 'N/A',
+        m.competition ?? 'N/A',
+        m.dataTimestamp || new Date().toISOString(),
+      ]),
+    ];
+    const wsMarket = XLSX.utils.aoa_to_sheet(marketRows);
+    setCols(wsMarket, [30, 15, 10, 10, 15, 18, 18, 18, 25]);
+    XLSX.utils.book_append_sheet(wb, wsMarket, '29. Keyword Market Data');
+  }
+
+  // 30. SERP Results (if provided)
+  if (serpDataList && serpDataList.length > 0) {
+    const serpRows = [
+      ['Target Keyword', 'Position', 'Competitor Title', 'Competitor Domain', 'Competitor URL', 'Snippet'],
+      ...serpDataList.flatMap((s) =>
+        (s.items || []).map((item: any) => [
+          s.keyword,
+          item.position,
+          item.title,
+          item.domain,
+          item.url,
+          item.snippet,
+        ])
+      ),
+    ];
+    if (serpRows.length > 1) {
+      const wsSerp = XLSX.utils.aoa_to_sheet(serpRows);
+      setCols(wsSerp, [25, 10, 35, 25, 45, 55]);
+      XLSX.utils.book_append_sheet(wb, wsSerp, '30. SERP Results');
+    }
+  }
+
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+
