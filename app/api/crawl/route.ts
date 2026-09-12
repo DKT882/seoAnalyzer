@@ -14,10 +14,13 @@ const startCrawlSchema = z
   .object({
     url: z.string().optional(),
     startUrl: z.string().optional(),
+    crawlMode: z.enum(['SINGLE_URL', 'DOMAIN_CRAWL', 'SITEMAP_CRAWL', 'URL_LIST']).default('DOMAIN_CRAWL'),
     maxPages: z.coerce.number().min(1).max(500).default(10),
+    maxDepth: z.coerce.number().min(1).max(10).default(5),
     concurrency: z.coerce.number().min(1).max(6).default(4),
     respectRobots: z.boolean().default(true),
     checkSitemap: z.boolean().default(true),
+    renderMode: z.enum(['static', 'browser', 'auto']).default('auto'),
     primaryKeyword: z.string().optional(),
   })
   .refine((data) => Boolean(data.url || data.startUrl), {
@@ -42,9 +45,9 @@ export async function POST(request: NextRequest) {
     }
 
     const inputUrl = (parsed.data.startUrl || parsed.data.url)!.trim();
-    const { maxPages, concurrency, respectRobots, checkSitemap, primaryKeyword } = parsed.data;
+    const { maxPages, maxDepth, concurrency, respectRobots, checkSitemap, crawlMode, renderMode, primaryKeyword } = parsed.data;
 
-    logger.info(`[API /api/crawl] Received crawl request for: "${inputUrl}" (Max pages: ${maxPages})`);
+    logger.info(`[API /api/crawl] Received crawl request for: "${inputUrl}" (Mode: ${crawlMode}, Max pages: ${maxPages}, Depth: ${maxDepth})`);
 
     // 1. Validate & Normalize start URL
     const urlVal = validateAndNormalizeUrl(inputUrl);
@@ -92,10 +95,13 @@ export async function POST(request: NextRequest) {
       {
         url: normalizedUrl,
         maxPages,
+        maxDepth,
         concurrency,
         respectRobots,
         checkSitemap,
-      },
+        crawlMode,
+        renderMode,
+      } as any,
       primaryKeyword
     ).catch((err) => {
       const structured = normalizeErrorToAnalyzerError(err);

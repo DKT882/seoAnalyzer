@@ -1162,11 +1162,14 @@ export type CrawlStatus =
   | 'cancelled';
 
 export interface CrawlOptions {
-  url: string;
-  maxPages: number;
+  url?: string;
+  maxPages?: number;
   concurrency?: number;
   respectRobots?: boolean;
   checkSitemap?: boolean;
+  crawlMode?: CrawlMode;
+  maxDepth?: number;
+  renderMode?: RenderMode;
 }
 
 export interface CrawlProgressStats {
@@ -1427,6 +1430,370 @@ export interface SiteContentStrategy {
   topicCoverageMethodology: string;
 }
 
+export type CrawlMode = 'SINGLE_URL' | 'DOMAIN_CRAWL' | 'SITEMAP_CRAWL' | 'URL_LIST';
+
+export type CrawlState =
+  | 'DISCOVERED'
+  | 'QUEUED'
+  | 'FETCHING'
+  | 'ANALYZING'
+  | 'COMPLETED'
+  | 'SKIPPED'
+  | 'FAILED'
+  | 'BLOCKED'
+  | 'DUPLICATE';
+
+export type DiscoveryMethod =
+  | 'START_URL'
+  | 'INTERNAL_LINK'
+  | 'SITEMAP'
+  | 'ROBOTS_SITEMAP'
+  | 'CANONICAL'
+  | 'HREFLANG'
+  | 'STRUCTURED_DATA'
+  | 'OTHER';
+
+export type QueryParamClassification =
+  | 'CANONICAL_VARIANT'
+  | 'DUPLICATE_LIKELY'
+  | 'FACET_VARIANT'
+  | 'TRACKING_VARIANT'
+  | 'PAGINATION'
+  | 'UNKNOWN_PARAMETER';
+
+export type CrawlFailureReason =
+  | 'DNS_ERROR'
+  | 'TIMEOUT'
+  | 'CONNECTION_ERROR'
+  | 'HTTP_4XX'
+  | 'HTTP_5XX'
+  | 'ROBOTS_BLOCKED'
+  | 'UNSUPPORTED_CONTENT_TYPE'
+  | 'RESPONSE_TOO_LARGE'
+  | 'RENDER_FAILURE'
+  | 'ANALYSIS_FAILURE'
+  | 'SSRF_BLOCKED';
+
+export interface CrawlResourceBudget {
+  maxRequests: number;
+  maxResponseBytes: number;
+  maxBrowserRenders: number;
+  maxRetries: number;
+  totalCrawlTimeoutMs: number;
+  usedRequests: number;
+  usedResponseBytes: number;
+  usedBrowserRenders: number;
+  usedRetries: number;
+}
+
+export interface CrossPageRecommendation {
+  observation: string;
+  evidence: string;
+  interpretation: string;
+  action: string;
+  expectedBenefit: string;
+  caution: string;
+}
+
+export interface InternalLinkNode {
+  url: string;
+  normalizedUrl: string;
+  pageType: PageType;
+  isIndexable: boolean;
+  primaryTopic?: string;
+  internalInlinkCount: number;
+  internalOutlinkCount: number;
+  internalLinkCentrality: number; // 0-100 normalized internal centrality score
+  structuralImportanceScore: number; // 0-100 composite structural importance
+  depth: number;
+  discoveryMethod: DiscoveryMethod;
+}
+
+export interface InternalLinkEdge {
+  sourceUrl: string;
+  targetUrl: string;
+  anchorText: string;
+  isNofollow: boolean;
+  isInternal: boolean;
+  statusCode?: number;
+  targetStatus?: 'HEALTHY' | 'REDIRECT' | 'BROKEN_4XX' | 'BROKEN_5XX' | 'NOINDEX' | 'CANONICALIZED';
+}
+
+export interface InternalLinkGraph {
+  nodes: InternalLinkNode[];
+  edges: InternalLinkEdge[];
+  totalEdges: number;
+  averageInlinksPerPage: number;
+  brokenInternalLinksCount: number;
+  redirectingInternalLinksCount: number;
+  noindexInternalLinksCount: number;
+}
+
+export interface OrphanCandidate {
+  url: string;
+  normalizedUrl: string;
+  title: string;
+  inlinkCount: number;
+  discoveryMethod: DiscoveryMethod;
+  pageType: PageType;
+  category: 'sitemap_only' | 'canonical_target' | 'utility_isolated' | 'potential_crawl_orphan';
+  evidence: string;
+  caution: string;
+}
+
+export interface DuplicateTitleGroup {
+  id: string;
+  title: string;
+  normalizedTitle: string;
+  pages: Array<{ url: string; pageType: PageType; depth: number }>;
+  isExactMatch: boolean;
+  recommendation: CrossPageRecommendation;
+}
+
+export interface DuplicateMetaGroup {
+  id: string;
+  metaDescription: string;
+  normalizedMetaDescription: string;
+  pages: Array<{ url: string; pageType: PageType; depth: number }>;
+  isExactMatch: boolean;
+  recommendation: CrossPageRecommendation;
+}
+
+export interface ContentSimilarityPair {
+  id: string;
+  pageA: { url: string; title: string; wordCount: number; pageType: PageType };
+  pageB: { url: string; title: string; wordCount: number; pageType: PageType };
+  similarityScore: number; // 0-100
+  similarityStatus: 'UNIQUE' | 'SIMILAR' | 'NEAR_DUPLICATE' | 'DUPLICATE_LIKELY';
+  sharedNgrams: string[];
+  recommendation: CrossPageRecommendation;
+}
+
+export interface CanonicalConsistencyIssue {
+  id: string;
+  url: string;
+  canonicalUrl: string;
+  issueType:
+    | 'CANONICAL_POINTS_TO_4XX'
+    | 'CANONICAL_POINTS_TO_REDIRECT'
+    | 'CANONICAL_POINTS_TO_NOINDEX'
+    | 'CANONICAL_LOOP'
+    | 'CANONICAL_CONFLICT'
+    | 'MULTIPLE_PAGES_SAME_CANONICAL'
+    | 'CANONICAL_UNCRAWLED';
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  evidence: string;
+  affectedUrls: string[];
+  recommendation: CrossPageRecommendation;
+}
+
+export interface IndexabilityConsistencyIssue {
+  id: string;
+  url: string;
+  issueType:
+    | 'SITEMAP_URL_NOINDEX'
+    | 'CANONICAL_TARGET_NOINDEX'
+    | 'CANONICAL_TARGET_404'
+    | 'INDEXABLE_BLOCKED_BY_ROBOTS'
+    | 'NOINDEX_WITH_FOLLOW_INLINKS';
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  evidence: string;
+  recommendation: CrossPageRecommendation;
+}
+
+export type SitemapUrlStatus =
+  | 'SITEMAP_URL_HEALTHY'
+  | 'SITEMAP_URL_CRAWLED'
+  | 'SITEMAP_URL_NOT_CRAWLED'
+  | 'SITEMAP_URL_NOINDEX'
+  | 'SITEMAP_URL_REDIRECT'
+  | 'SITEMAP_URL_4XX'
+  | 'SITEMAP_URL_5XX'
+  | 'SITEMAP_URL_CANONICALIZED';
+
+export interface SitemapConsistencyItem {
+  url: string;
+  status: SitemapUrlStatus;
+  httpStatus?: number;
+  isIndexable?: boolean;
+  canonicalUrl?: string;
+  notes: string;
+}
+
+export interface RedirectGraphNode {
+  startUrl: string;
+  finalUrl: string;
+  hopCount: number;
+  chain: string[];
+  isLoop: boolean;
+  destinationStatus: number;
+  isInternalLinkTarget: boolean;
+  incomingLinkCount: number;
+}
+
+export interface HreflangCrossPageIssue {
+  id: string;
+  sourceUrl: string;
+  alternateUrl: string;
+  langCode: string;
+  issueType: 'MISSING_RECIPROCAL' | 'UNREACHABLE_ALTERNATE' | 'CONFLICTING_LANGUAGE_REGION' | 'SELF_REFERENCE_MISSING';
+  evidence: string;
+  recommendation: CrossPageRecommendation;
+}
+
+export interface StructuredDataCrossPagePattern {
+  schemaType: string;
+  pagesCount: number;
+  sampleUrls: string[];
+  contextuallyExpectedOn: PageType[];
+  missingContextEvidence?: string;
+}
+
+export interface TopicClusterHealth {
+  clusterId: string;
+  primaryTopic: string;
+  subTopics: string[];
+  pagesCount: number;
+  pages: Array<{ url: string; title: string; pageType: PageType; semanticScore: number; depth: number }>;
+  averageSemanticScore: number;
+  averageWordCount: number;
+  strongestPage: { url: string; title: string; score: number };
+  weakestPage: { url: string; title: string; score: number };
+  clusterInternalLinkDensity: number; // 0-100
+  uncoveredConcepts: string[];
+}
+
+export interface SearchIntentOverlapSignal {
+  id: string;
+  primaryTopic: string;
+  competingPages: Array<{
+    url: string;
+    title: string;
+    pageType: PageType;
+    intent: ContentSearchIntent;
+    h1Text?: string;
+    relevanceScore: number;
+    inTitle: boolean;
+    inH1: boolean;
+  }>;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  evidence: {
+    topicSimilarity: number;
+    intentSimilarity: boolean;
+    pageTypeSimilarity: boolean;
+    titleH1Similarity: boolean;
+    contentSimilarity: number;
+  };
+  observation: string;
+  interpretation: string;
+  action: string;
+  expectedBenefit: string;
+  caution: string;
+}
+
+export interface InternalLinkOpportunity {
+  id: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  targetUrl: string;
+  targetTitle: string;
+  targetPrimaryTopic: string;
+  sourceContextSnippet: string;
+  suggestedAnchorConcept: string;
+  reason: string;
+  caution: string;
+  confidence: 'HIGH' | 'MEDIUM';
+}
+
+export type SiteIssuePriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+
+export interface SiteIssue {
+  id: string;
+  category: 'CRAWLABILITY' | 'INDEXABILITY' | 'CONTENT' | 'ARCHITECTURE' | 'CANONICAL' | 'LINKS';
+  priority: SiteIssuePriority;
+  title: string;
+  description: string;
+  affectedUrlsCount: number;
+  affectedUrlsSample: string[];
+  recommendation: CrossPageRecommendation;
+}
+
+export interface SiteHealthScoreBreakdown {
+  overall: number; // 0-100
+  crawlabilityAndTechnical: number; // 0-100
+  indexabilityAndDirectives: number; // 0-100
+  contentAndDuplication: number; // 0-100
+  siteArchitectureAndLinks: number; // 0-100
+  deductions: Array<{
+    category: string;
+    reason: string;
+    points: number;
+    affectedCount: number;
+    rootCauseId?: string;
+  }>;
+  methodologyNotes: string;
+}
+
+export interface SiteSummary {
+  pagesCrawled: number;
+  pagesSuccessful: number;
+  pagesFailed: number;
+  indexability: {
+    indexable: number;
+    noindex: number;
+    blocked: number;
+  };
+  content: {
+    strongPages: number;
+    moderatePages: number;
+    thinPages: number;
+  };
+  technical: {
+    brokenInternalLinks: number;
+    duplicateTitleGroups: number;
+    duplicateMetaGroups: number;
+    redirectChains: number;
+    canonicalConflicts: number;
+  };
+  topics: {
+    clustersCount: number;
+    highOverlapClustersCount: number;
+  };
+}
+
+export interface CrawlPageRecord {
+  id: string;
+  requestedUrl: string;
+  normalizedUrl: string;
+  finalUrl: string;
+  canonicalUrl?: string;
+  urlHash: string;
+  statusCode: number;
+  contentType: string;
+  depth: number;
+  discoveryMethod: DiscoveryMethod;
+  discoveredFrom?: string;
+  crawlStatus: CrawlState;
+  failureReason?: CrawlFailureReason;
+  errorMessage?: string;
+  pageType: PageType;
+  isIndexable: boolean;
+  renderMode: RenderMode;
+  crawlDurationMs: number;
+  seoReport?: SEOReport;
+  internalInlinksCount: number;
+  internalOutlinksCount: number;
+  externalOutlinksCount: number;
+  inlinkAnchors: string[];
+  outlinkUrls: string[];
+  semanticScore: number;
+  technicalScore: number;
+  onPageScore: number;
+  overallScore: number;
+  wordCount: number;
+  issuesCount: number;
+}
+
 export interface WebsiteCrawlReport {
   id: string;
   domain: string;
@@ -1436,9 +1803,30 @@ export interface WebsiteCrawlReport {
   crawlDurationMs?: number;
   maxPagesLimit?: number;
   status: CrawlStatus;
+  crawlMode?: CrawlMode;
+  resourceBudget?: CrawlResourceBudget;
   overview: SiteOverviewData;
   pages: CrawlPageSummary[];
+  pageRecords?: CrawlPageRecord[];
   pageReports: Record<string, SEOReport>;
+  siteHealthScore?: SiteHealthScoreBreakdown;
+  siteSummary?: SiteSummary;
+  siteIssues?: SiteIssue[];
+  internalLinkGraph?: InternalLinkGraph;
+  orphanCandidates?: OrphanCandidate[];
+  duplicateTitles?: DuplicateTitleGroup[];
+  duplicateMetaDescriptions?: DuplicateMetaGroup[];
+  contentSimilarityPairs?: ContentSimilarityPair[];
+  canonicalConsistencyIssues?: CanonicalConsistencyIssue[];
+  indexabilityConsistencyIssues?: IndexabilityConsistencyIssue[];
+  sitemapConsistency?: SitemapConsistencyItem[];
+  redirectGraph?: RedirectGraphNode[];
+  hreflangCrossPageIssues?: HreflangCrossPageIssue[];
+  structuredDataPatterns?: StructuredDataCrossPagePattern[];
+  topicClusterHealth?: TopicClusterHealth[];
+  searchIntentOverlaps?: SearchIntentOverlapSignal[];
+  internalLinkOpportunities?: InternalLinkOpportunity[];
+  priorityActions?: SiteIssue[];
   siteKeywords: SiteKeywordItem[];
   keywordStrategy: {
     primaryKeyword: string;
@@ -1476,11 +1864,14 @@ export interface CrawlSession {
 export interface StartCrawlRequest {
   url?: string;
   startUrl?: string;
+  crawlMode?: CrawlMode;
   maxPages?: number;
+  maxDepth?: number;
   concurrency?: number;
   respectRobots?: boolean;
   checkRobots?: boolean;
   checkSitemap?: boolean;
+  renderMode?: RenderMode;
   primaryKeyword?: string;
 }
 
@@ -1489,4 +1880,5 @@ export interface StartCrawlResponse {
   status: CrawlStatus;
   message: string;
 }
+
 

@@ -1,12 +1,16 @@
 import 'server-only';
 import {
   CrawlOptions,
-  CrawlProgressStats,
   CrawlPageSummary,
+  CrawlPageRecord,
   WebsiteCrawlReport,
   SEOReport,
+  CrawlMode,
+  RenderMode,
 } from '@/types';
-import { validateAndNormalizeUrl, cleanAndNormalizeCrawlUrl } from '../utils/urlUtils';
+import { validateAndNormalizeUrl } from '../utils/urlUtils';
+import { normalizeUrlDeterministically } from './urlNormalizer';
+import { CrawlFrontier } from './crawlFrontier';
 import { parseRobotsTxt } from '../robots/robotsParser';
 import { parseSitemapXml } from '../sitemap/sitemapParser';
 import { generateSeoReport } from '../reports/reportGenerator';
@@ -15,6 +19,19 @@ import { calculateSiteOverview, aggregateSiteKeywords, detectKeywordCannibalizat
 import { generateSeoRecommendations } from '../recommendations/recommendationEngine';
 import { generateKeywordStrategy } from '../keywords/keywordStrategy';
 import { generateSiteContentStrategy } from '../content/contentStrategy';
+import { buildInternalLinkGraph } from './linkGraph';
+import { detectOrphanCandidates } from './orphanDetector';
+import { detectDuplicateTitles, detectDuplicateMetaDescriptions, detectContentSimilarityPairs } from './duplicateDetector';
+import {
+  auditCanonicalConsistency,
+  auditIndexabilityConsistency,
+  compileSitemapConsistency,
+  buildRedirectGraph,
+  auditHreflangCrossPage,
+  analyzeStructuredDataCrossPage,
+} from './consistencyAuditor';
+import { clusterPagesByTopic, detectSearchIntentOverlaps, identifyInternalLinkOpportunities } from './topicClusterer';
+import { calculateSiteHealthScore } from './siteScorer';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -23,19 +40,22 @@ export const activeCrawls = new Map<string, { isCancelled: boolean }>();
 
 /**
  * Executes an asynchronous whole-website crawl session with bounded concurrency, sitemap discovery,
- * robots.txt adherence, SSRF security validation, and comprehensive SEO aggregation.
+ * robots.txt adherence, SSRF security validation, and comprehensive cross-page SEO intelligence.
  */
 export async function executeWebsiteCrawl(
   sessionId: string,
   startUrl: string,
-  options: CrawlOptions,
+  options: CrawlOptions = {},
   primaryKeywordInput?: string
 ): Promise<WebsiteCrawlReport> {
   const startTime = Date.now();
+  const crawlMode: CrawlMode = (options as any).crawlMode || 'DOMAIN_CRAWL';
   const maxPages = Math.min(options.maxPages || config.maxCrawlPages, config.maxCrawlPages);
+  const maxDepth = (options as any).maxDepth ?? 5;
   const concurrency = Math.min(options.concurrency || config.crawlConcurrency, 6);
   const respectRobots = options.respectRobots ?? true;
   const checkSitemap = options.checkSitemap ?? true;
+  const renderMode: RenderMode = (options as any).renderMode || 'auto';
 
   // Register cancellation token
   const cancelToken = { isCancelled: false };
@@ -50,23 +70,31 @@ export async function executeWebsiteCrawl(
   const baseHostname = new URL(normalizedStartUrl).hostname;
   const baseDomain = baseHostname.replace(/^www\./, '');
 
-  logger.info(`[CRAWL ${sessionId}] Starting website crawl for ${normalizedStartUrl} (Max Pages: ${maxPages}, Concurrency: ${concurrency})`);
+  logger.info(`[CRAWL ${sessionId}] Starting ${crawlMode} for ${normalizedStartUrl} (Max Pages: ${maxPages}, Depth: ${maxDepth}, Concurrency: ${concurrency})`);
 
-  // State Sets
-  const discoveredUrls = new Set<string>();
-  const queuedUrls: string[] = [];
-  const crawledUrls = new Set<string>();
-  const failedUrls = new Map<string, string>();
-  const skippedUrls = new Map<string, string>();
+  // Initialize Crawl Frontier with bounded budget
+  const frontier = new CrawlFrontier({
+    maxPages,
+    maxDepth,
+    baseHostname,
+    maxRequests: maxPages * 2,
+    maxResponseBytes: 50 * 1024 * 1024, // 50MB
+    maxBrowserRenders: 15,
+    maxRetries: 2,
+    totalCrawlTimeoutMs: 180000, // 3 minutes
+  });
+
+  // State maps
+  const pageRecordsMap = new Map<string, CrawlPageRecord>();
   const pageSummaries: CrawlPageSummary[] = [];
   const pageReports: Record<string, SEOReport> = {};
+  const sitemapUrlsDiscovered = new Set<string>();
+  const canonicalTargetsDiscovered = new Set<string>();
 
-  // Add root start URL
-  const cleanedStart = cleanAndNormalizeCrawlUrl(normalizedStartUrl, baseHostname) || normalizedStartUrl;
-  discoveredUrls.add(cleanedStart);
-  queuedUrls.push(cleanedStart);
+  // Seed start URL into frontier
+  frontier.addCandidate(normalizedStartUrl, 0, 'START_URL');
 
-  // 1. Inspect Robots.txt & Sitemap Sources
+  // 1. Inspect Robots.txt
   let robotsAnalysis = {
     exists: false,
     url: '',
@@ -82,8 +110,8 @@ export async function executeWebsiteCrawl(
     logger.warn(`[CRAWL ${sessionId}] Robots.txt check warning: ${err.message}`);
   }
 
-  // 2. Discover URLs from Sitemap (if enabled)
-  if (checkSitemap) {
+  // 2. Discover URLs from Sitemap (if enabled or in SITEMAP_CRAWL mode)
+  if (checkSitemap || crawlMode === 'SITEMAP_CRAWL') {
     try {
       const sitemapUrlsToCheck = new Set<string>();
       sitemapUrlsToCheck.add(new URL('/sitemap.xml', normalizedStartUrl).href);
@@ -92,24 +120,17 @@ export async function executeWebsiteCrawl(
       }
 
       for (const smUrl of Array.from(sitemapUrlsToCheck)) {
-        if (discoveredUrls.size >= maxPages * 3) break; // Limit discovery memory
+        if (frontier.getStats().discovered >= maxPages * 4) break;
         try {
           const sitemapRes = await parseSitemapXml(smUrl);
           if (sitemapRes.exists && sitemapRes.urlsSample.length > 0) {
             for (const sampleUrl of sitemapRes.urlsSample) {
-              const cleaned = cleanAndNormalizeCrawlUrl(sampleUrl, baseHostname);
-              if (cleaned && !discoveredUrls.has(cleaned)) {
-                // Pre-validate SSRF on candidate
-                const val = validateAndNormalizeUrl(cleaned);
-                if (val.isValid) {
-                  discoveredUrls.add(cleaned);
-                  queuedUrls.push(cleaned);
-                }
-              }
+              sitemapUrlsDiscovered.add(sampleUrl);
+              frontier.addCandidate(sampleUrl, 1, 'SITEMAP', smUrl);
             }
           }
         } catch {
-          // ignore individual sitemap errors
+          // ignore individual sitemap parse issues
         }
       }
     } catch (err: any) {
@@ -117,14 +138,15 @@ export async function executeWebsiteCrawl(
     }
   }
 
-  logger.info(`[CRAWL ${sessionId}] Initial discovery completed. ${discoveredUrls.size} URLs queued.`);
+  const initialStats = frontier.getStats();
+  logger.info(`[CRAWL ${sessionId}] Initial discovery completed. ${initialStats.discovered} URLs queued.`);
 
   // Update initial DB progress
   crawlRepository.updateCrawlProgress(
     sessionId,
     {
-      discovered: discoveredUrls.size,
-      queued: queuedUrls.length,
+      discovered: initialStats.discovered,
+      queued: initialStats.queued,
       analyzed: 0,
       failed: 0,
       skipped: 0,
@@ -132,40 +154,48 @@ export async function executeWebsiteCrawl(
     'crawling'
   );
 
-  // Helper to process one single page
-  const processUrl = async (url: string): Promise<void> => {
-    if (cancelToken.isCancelled || crawledUrls.size >= maxPages) {
+  // Helper to process one single URL
+  const processCandidate = async (candidateUrl: string, depth: number, discoveryMethod: any, discoveredFrom?: string): Promise<void> => {
+    if (cancelToken.isCancelled || frontier.getCompletedCount() >= maxPages) {
       return;
     }
 
-    // SSRF & Domain boundary validation
-    const validation = validateAndNormalizeUrl(url);
+    // Validate SSRF & domain boundary
+    const validation = validateAndNormalizeUrl(candidateUrl);
     if (!validation.isValid || !validation.normalizedUrl) {
-      skippedUrls.set(url, validation.error || 'Invalid URL');
+      frontier.markSkipped(candidateUrl, validation.error || 'Invalid URL');
       return;
     }
 
-    const normalizedUrl = validation.normalizedUrl;
+    const normUrl = validation.normalizedUrl;
 
     // Check Robots.txt compliance
-    if (respectRobots && robotsAnalysis.exists) {
-      // If root robots.txt disallowed it
-      if (!robotsAnalysis.isBotAllowed && normalizedUrl === normalizedStartUrl) {
-        skippedUrls.set(normalizedUrl, 'Disallowed by robots.txt');
-        return;
-      }
+    if (respectRobots && robotsAnalysis.exists && !robotsAnalysis.isBotAllowed && normUrl === normalizedStartUrl) {
+      frontier.markBlocked(normUrl, 'Disallowed by robots.txt');
+      return;
     }
 
+    frontier.markAnalyzing(normUrl);
+
     try {
-      logger.info(`[CRAWL ${sessionId}] Analyzing page (${crawledUrls.size + 1}/${maxPages}): ${normalizedUrl}`);
-      
-      const report = await generateSeoReport(normalizedUrl, {
-        checkRobots: false, // already checked
+      const currentCompleted = frontier.getCompletedCount();
+      logger.info(`[CRAWL ${sessionId}] Analyzing page (${currentCompleted + 1}/${maxPages}): ${normUrl} (depth: ${depth})`);
+
+      const report = await generateSeoReport(normUrl, {
+        checkRobots: false,
         checkSitemap: false,
+        renderMode,
       });
 
-      crawledUrls.add(normalizedUrl);
-      pageReports[normalizedUrl] = report;
+      const responseBytes = report.technical.pageSizeBytes || 0;
+      const wasBrowserRendered = Boolean(report.renderedSnapshot);
+      frontier.markCompleted(normUrl, responseBytes, wasBrowserRendered);
+
+      pageReports[normUrl] = report;
+
+      if (report.onPage.canonicalUrl) {
+        canonicalTargetsDiscovered.add(report.onPage.canonicalUrl);
+      }
 
       const summary: CrawlPageSummary = {
         id: report.id,
@@ -185,58 +215,85 @@ export async function executeWebsiteCrawl(
         responseTimeMs: report.technical.responseTimeMs,
         issuesCount: report.issues.length,
       };
-
       pageSummaries.push(summary);
+
+      const normIdent = normalizeUrlDeterministically(normUrl) || { urlHash: report.id };
+      const pageRecord: CrawlPageRecord = {
+        id: normIdent.urlHash,
+        requestedUrl: candidateUrl,
+        normalizedUrl: normUrl,
+        finalUrl: report.technical.redirectChain?.[report.technical.redirectChain.length - 1] || normUrl,
+        canonicalUrl: report.onPage.canonicalUrl,
+        urlHash: normIdent.urlHash,
+        statusCode: report.technical.httpStatus,
+        contentType: report.technical.contentType || 'text/html',
+        depth,
+        discoveryMethod,
+        discoveredFrom,
+        crawlStatus: 'COMPLETED',
+        pageType: report.contentIntelligence?.pageType.detectedType || 'ARTICLE',
+        isIndexable: report.technical.isIndexable,
+        renderMode,
+        crawlDurationMs: report.durationMs,
+        seoReport: report,
+        internalInlinksCount: 0,
+        internalOutlinksCount: report.links.internalLinksCount,
+        externalOutlinksCount: report.links.externalLinksCount,
+        inlinkAnchors: [],
+        outlinkUrls: report.links.internalLinks.map((l) => l.url),
+        semanticScore: report.contentIntelligence?.score?.overall ?? report.scores.content,
+        technicalScore: report.scores.technical,
+        onPageScore: report.scores.onPage,
+        overallScore: report.scores.overall,
+        wordCount: report.onPage.wordCount,
+        issuesCount: report.issues.length,
+      };
+      pageRecordsMap.set(normUrl, pageRecord);
+
       crawlRepository.saveCrawlPage(sessionId, summary, report);
 
-      // Extract new internal links for further discovery
-      if (discoveredUrls.size < maxPages * 3) {
+      // Extract new internal links if below max depth and within budget
+      if (crawlMode !== 'SINGLE_URL' && depth < maxDepth && !frontier.isBudgetExceeded()) {
         for (const link of report.links.internalLinks) {
-          const cleaned = cleanAndNormalizeCrawlUrl(link.url, baseHostname);
-          if (cleaned && !discoveredUrls.has(cleaned)) {
-            const val = validateAndNormalizeUrl(cleaned);
-            if (val.isValid) {
-              discoveredUrls.add(cleaned);
-              queuedUrls.push(cleaned);
-            }
-          }
+          frontier.addCandidate(link.url, depth + 1, 'INTERNAL_LINK', normUrl);
         }
       }
 
-      // Update DB progress
+      // Update progress in DB
+      const currentStats = frontier.getStats();
       crawlRepository.updateCrawlProgress(
         sessionId,
         {
-          discovered: discoveredUrls.size,
-          queued: Math.max(0, queuedUrls.length),
-          analyzed: crawledUrls.size,
-          failed: failedUrls.size,
-          skipped: skippedUrls.size,
+          discovered: currentStats.discovered,
+          queued: currentStats.queued,
+          analyzed: currentStats.completed,
+          failed: currentStats.failed,
+          skipped: currentStats.skipped,
         },
         'crawling',
-        normalizedUrl
+        normUrl
       );
     } catch (err: any) {
-      logger.warn(`[CRAWL ${sessionId}] Failed to analyze ${normalizedUrl}: ${err.message}`);
-      failedUrls.set(normalizedUrl, err.message || 'Analysis failed');
+      logger.warn(`[CRAWL ${sessionId}] Failed to analyze ${normUrl}: ${err.message}`);
+      const isTransient = err.message?.includes('timeout') || err.message?.includes('ECONNRESET');
+      frontier.markFailed(normUrl, 'ANALYSIS_FAILURE', err.message || 'Analysis failed', isTransient);
+
+      const stats = frontier.getStats();
       crawlRepository.updateCrawlProgress(sessionId, {
-        failed: failedUrls.size,
+        failed: stats.failed,
       });
     }
   };
 
-  // 3. Worker Pool Concurrency Loop
-  let queueIndex = 0;
+  // 3. Concurrency Worker Pool Loop
   const workers: Promise<void>[] = [];
-
   for (let w = 0; w < concurrency; w++) {
     workers.push(
       (async () => {
-        while (queueIndex < queuedUrls.length && crawledUrls.size < maxPages && !cancelToken.isCancelled) {
-          const currentUrl = queuedUrls[queueIndex++];
-          if (currentUrl && !crawledUrls.has(currentUrl) && !failedUrls.has(currentUrl) && !skippedUrls.has(currentUrl)) {
-            await processUrl(currentUrl);
-          }
+        while (!cancelToken.isCancelled && frontier.getCompletedCount() < maxPages) {
+          const item = frontier.getNext();
+          if (!item) break;
+          await processCandidate(item.url, item.depth, item.discoveryMethod, item.discoveredFrom);
         }
       })()
     );
@@ -244,32 +301,68 @@ export async function executeWebsiteCrawl(
 
   await Promise.all(workers);
 
-  // Clean up cancellation token from registry
+  // Clean up cancellation token
   activeCrawls.delete(sessionId);
 
   const durationMs = Date.now() - startTime;
   const isCancelled = cancelToken.isCancelled;
   const finalStatus = isCancelled ? 'cancelled' : 'completed';
+  const finalStats = frontier.getStats();
 
-  logger.info(`[CRAWL ${sessionId}] Crawl finished with status "${finalStatus}". ${crawledUrls.size} pages analyzed in ${durationMs}ms.`);
+  logger.info(`[CRAWL ${sessionId}] Crawl finished with status "${finalStatus}". ${finalStats.completed} analyzed, ${finalStats.failed} failed.`);
 
-  // 4. Assemble Whole-Website Report
+  // 4. Assemble Whole-Website Cross-Page Intelligence
   const analyzedReportsList = Object.values(pageReports);
+  const crawledUrlReportMap = new Map<string, SEOReport>();
+  for (const page of analyzedReportsList) {
+    crawledUrlReportMap.set(page.normalizedUrl || page.url, page);
+  }
 
+  // Cross-Page Graph & Intelligence Modules
+  const internalLinkGraph = buildInternalLinkGraph(analyzedReportsList, pageRecordsMap);
+  const orphanCandidates = detectOrphanCandidates(internalLinkGraph, sitemapUrlsDiscovered, canonicalTargetsDiscovered);
+  const duplicateTitles = detectDuplicateTitles(analyzedReportsList);
+  const duplicateMetaDescriptions = detectDuplicateMetaDescriptions(analyzedReportsList);
+  const contentSimilarityPairs = detectContentSimilarityPairs(analyzedReportsList);
+  const canonicalConsistencyIssues = auditCanonicalConsistency(analyzedReportsList, crawledUrlReportMap);
+  const indexabilityConsistencyIssues = auditIndexabilityConsistency(analyzedReportsList, sitemapUrlsDiscovered);
+  const sitemapConsistency = compileSitemapConsistency(Array.from(sitemapUrlsDiscovered), crawledUrlReportMap);
+  const redirectGraph = buildRedirectGraph(analyzedReportsList);
+  const hreflangCrossPageIssues = auditHreflangCrossPage(analyzedReportsList, crawledUrlReportMap);
+  const structuredDataPatterns = analyzeStructuredDataCrossPage(analyzedReportsList);
+  const topicClusterHealth = clusterPagesByTopic(analyzedReportsList, internalLinkGraph);
+  const searchIntentOverlaps = detectSearchIntentOverlaps(analyzedReportsList);
+  const internalLinkOpportunities = identifyInternalLinkOpportunities(analyzedReportsList, internalLinkGraph);
+
+  // Site Health Scoring & Priority Engine
+  const { score: siteHealthScore, issues: siteIssues, summary: siteSummary } = calculateSiteHealthScore({
+    pages: analyzedReportsList,
+    failedUrlsCount: finalStats.failed,
+    linkGraph: internalLinkGraph,
+    duplicateTitles,
+    duplicateMetas: duplicateMetaDescriptions,
+    contentSimilarities: contentSimilarityPairs,
+    canonicalIssues: canonicalConsistencyIssues,
+    indexabilityIssues: indexabilityConsistencyIssues,
+    intentOverlaps: searchIntentOverlaps,
+    orphanCandidates,
+  });
+
+  // Legacy Site Overview & Keyword Aggregation
   const overview = calculateSiteOverview({
     domain: baseDomain,
     targetUrl: normalizedStartUrl,
     pages: analyzedReportsList,
-    discoveredCount: discoveredUrls.size,
-    analyzedCount: crawledUrls.size,
-    failedCount: failedUrls.size,
-    skippedCount: skippedUrls.size,
+    discoveredCount: finalStats.discovered,
+    analyzedCount: finalStats.completed,
+    failedCount: finalStats.failed,
+    skippedCount: finalStats.skipped,
     maxPagesAllowed: maxPages,
     robotsStatus: {
       exists: robotsAnalysis.exists,
       url: robotsAnalysis.url,
-      allowedPagesCount: crawledUrls.size,
-      blockedPagesCount: skippedUrls.size,
+      allowedPagesCount: finalStats.completed,
+      blockedPagesCount: finalStats.blocked + finalStats.skipped,
       sitemapSources: robotsAnalysis.sitemaps,
     },
   });
@@ -287,10 +380,33 @@ export async function executeWebsiteCrawl(
     startUrl: normalizedStartUrl,
     timestamp: new Date().toISOString(),
     durationMs,
+    crawlDurationMs: durationMs,
+    maxPagesLimit: maxPages,
     status: finalStatus,
+    crawlMode,
+    resourceBudget: finalStats.budget,
     overview,
     pages: pageSummaries,
+    pageRecords: Array.from(pageRecordsMap.values()),
     pageReports,
+    siteHealthScore,
+    siteSummary,
+    siteIssues,
+    internalLinkGraph,
+    orphanCandidates,
+    duplicateTitles,
+    duplicateMetaDescriptions,
+    contentSimilarityPairs,
+    canonicalConsistencyIssues,
+    indexabilityConsistencyIssues,
+    sitemapConsistency,
+    redirectGraph,
+    hreflangCrossPageIssues,
+    structuredDataPatterns,
+    topicClusterHealth,
+    searchIntentOverlaps,
+    internalLinkOpportunities,
+    priorityActions: siteIssues.filter((i) => i.priority === 'CRITICAL' || i.priority === 'HIGH'),
     siteKeywords,
     keywordStrategy: {
       primaryKeyword: keywordStrategy.primaryKeyword,
@@ -307,10 +423,9 @@ export async function executeWebsiteCrawl(
 
   if (isCancelled) {
     crawlRepository.cancelCrawlSession(sessionId);
-  } else if (crawledUrls.size === 0 && failedUrls.size > 0) {
-    const firstError = Array.from(failedUrls.values())[0] || 'Failed to crawl start URL';
-    logger.warn(`[CRAWL ${sessionId}] All candidate URLs failed to crawl. Marking session as failed: ${firstError}`);
-    crawlRepository.failCrawlSession(sessionId, firstError);
+  } else if (finalStats.completed === 0 && finalStats.failed > 0) {
+    logger.warn(`[CRAWL ${sessionId}] All candidate URLs failed to crawl. Marking session as failed.`);
+    crawlRepository.failCrawlSession(sessionId, 'All candidate URLs failed to crawl');
   } else {
     crawlRepository.completeCrawlSession(sessionId, finalReport);
   }

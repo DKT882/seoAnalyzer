@@ -533,4 +533,24 @@ Phase 6 implements deep evaluation of content quality, structure, search intent,
 
 For complete documentation, see `docs/CONTENT_SEMANTIC_INTELLIGENCE_GUIDE.md`.
 
+---
+
+## 39. Site-Wide SEO Intelligence & Multi-URL Crawler Engine (Phase 7)
+
+Phase 7 expands the system from single-URL audits to whole-domain crawling and architectural intelligence:
+
+- **Bounded Crawl Frontier**: 9-state queue state machine (`DISCOVERED`, `QUEUED`, `FETCHING`, `ANALYZING`, `COMPLETED`, `SKIPPED`, `FAILED`, `BLOCKED`, `DUPLICATE`) bounded by strict resource budgets (max requests, response bytes, browser renders, retries, and total duration).
+- **Deterministic URL Normalization**: Normalizes URLs across 8 stages and protects against recursive directory loops, calendar matrices, and session ID crawl traps.
+- **Directed Internal Link Graph**: Calculates **Internal Link Centrality** using power iteration random walk models without misrepresenting metrics as "Google PageRank".
+- **Orphan Candidate Detection**: Classifies 0-inlink URLs into 4 contextual archetypes (`sitemap_only`, `canonical_target`, `utility_isolated`, `potential_crawl_orphan`) without asserting absolute orphan status.
+- **Duplicate Metadata & Shingled Content Similarity**: Groups duplicate `<title>` and `<meta name="description">` tags, and computes 3-gram shingle Jaccard content overlap.
+- **Cross-Page Consistency Auditor**: Cross-audits canonical integrity (chains, loops, errors), indexability conflicts (noindex pages linked in navigation), sitemap-frontier reconciliation, redirect graphs, and reciprocal hreflang alternate links.
+- **Topic Clustering & Search-Intent Overlaps**: Clusters domain pages by primary topics and identifies **Potential Search-Intent Overlap** only when corroborated by multiple independent signals (topic + intent + page type + title/H1).
+- **Contextual Internal Link Opportunities**: Discovers high-value unlinked keyword mentions across pages and generates recommended anchor text.
+- **Multi-Factor Site Health Scoring**: Calculates an explainable 0–100 domain score across 4 weighted categories with sublinear penalty caps to prevent widespread minor issues from unfairly zeroing scores.
+- **Standardized 6-Pillar Recommendations**: Enforces the 6-pillar format: `Observation ➔ Evidence ➔ Interpretation ➔ Action ➔ Expected Benefit ➔ Caution`.
+
+For complete architectural and operational details, see `docs/SITE_WIDE_CRAWLER_GUIDE.md`.
+
+
 
