@@ -185,8 +185,24 @@ function initSchema(db: Database.Database): void {
       UNIQUE(keyword, country, language, provider)
     );
 
+    CREATE TABLE IF NOT EXISTS serp_snapshots (
+      id TEXT PRIMARY KEY,
+      fingerprint TEXT NOT NULL UNIQUE,
+      query TEXT NOT NULL,
+      normalized_query TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      location TEXT,
+      language TEXT,
+      device TEXT,
+      collected_at TEXT NOT NULL,
+      organic_count INTEGER NOT NULL,
+      data_json TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_kmd_lookup ON keyword_market_data(keyword, country, language);
     CREATE INDEX IF NOT EXISTS idx_serp_lookup ON serp_results(keyword, country, language);
     CREATE INDEX IF NOT EXISTS idx_provider_cache ON seo_provider_cache(cache_key);
+    CREATE INDEX IF NOT EXISTS idx_serp_snapshots_fingerprint ON serp_snapshots(fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_serp_snapshots_query ON serp_snapshots(normalized_query);
   `);
 }

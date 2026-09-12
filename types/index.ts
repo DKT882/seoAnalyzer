@@ -1881,4 +1881,10 @@ export interface StartCrawlResponse {
   message: string;
 }
 
+// ==========================================
+// 19. PHASE 8: EXTERNAL SEARCH INTELLIGENCE TYPES
+// ==========================================
+export * from '../lib/search/searchTypes';
+
+
 

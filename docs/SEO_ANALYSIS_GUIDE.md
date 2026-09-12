@@ -552,5 +552,20 @@ Phase 7 expands the system from single-URL audits to whole-domain crawling and a
 
 For complete architectural and operational details, see `docs/SITE_WIDE_CRAWLER_GUIDE.md`.
 
+---
 
+## 40. External Search Intelligence & SERP Analysis Engine (Phase 8)
 
+Phase 8 introduces external search and SERP intelligence into the analysis pipeline:
+
+- **Strict Provider Neutrality**: Pure interface abstraction (`SearchProvider`) decoupling all analysis logic from external vendor structures.
+- **Explicit Search Audit Modes**: Dedicated workflows for `SEARCH_QUERY` (keyword level), `PAGE_SEARCH_INTELLIGENCE` (single-page topic demand), and `SITE_SEARCH_INTELLIGENCE` (domain cluster expansion bounded before requests).
+- **Rigorous Position Semantics**: Distinguishes overall layout position (`serpPosition`) from strict organic rank (`organicPosition`). Non-organic SERP features (PAA, Local Pack, Video) receive `organicPosition: undefined`.
+- **SERP Feature Taxonomy**: Classifies `FEATURED_SNIPPET`, `LOCAL_PACK`, `PEOPLE_ALSO_ASK`, `VIDEO`, `IMAGE`, `NEWS`, `SHOPPING`, `RELATED_SEARCHES`, and `KNOWLEDGE_PANEL`.
+- **Search Intent Pattern Validation**: Recognizes dominant search intent patterns or classifies heterogeneous landscapes as `OBSERVED_SERP_INTENT_MIXED` without forcing arbitrary classifications.
+- **Observed SERP Domain Analysis**: Aggregates ranking domain frequencies and average positions using neutral non-speculative terminology without fabricating business competitor relationships.
+- **Observable Content Gaps & Opportunities**: Pinpoints common sub-topics surfacing in top SERP listings missing from user pages and integrates with Phase 7 internal link graphs to discover dedicated sibling pages.
+- **Cost & Budget Safety**: Hard-capped provider request limits (`maxProviderRequestsPerAudit`) enforced before dispatching external HTTP calls.
+- **Zero Metric Fabrication & Provenance**: Zero fabricated ranking probabilities, traffic estimates, DA/PA, or search volume. Every observation carries structured provenance (`source`, `provider`, `collectedAt`, `device`, `extractionMethod`, `isSyntheticTest`, `fingerprint`).
+
+For complete specifications and API details, see `docs/SEARCH_INTELLIGENCE_GUIDE.md`.
