@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Authentication & Token Management | DevDocs</title>
+  <meta name="description" content="Learn how to authenticate REST API requests using JWT bearer tokens, API keys, and OAuth2 flows. Includes practical curl and Python code examples.">
+  <link rel="canonical" href="https://example.com/docs/api-authentication">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "API Authentication & Token Management Guide",
+    "description": "Comprehensive reference guide for authenticating developer API requests.",
+    "articleSection": "Developer Documentation"
+  }
+  </script>
+</head>
+<body>
+  <div class="doc-layout">
+    <aside class="sidebar">
+      <nav>
+        <a href="https://example.com/docs/quickstart">Quickstart</a>
+        <a href="https://example.com/docs/api-authentication" class="active">Authentication</a>
+        <a href="https://example.com/docs/rate-limits">Rate Limits</a>
+        <a href="https://example.com/docs/webhooks">Webhooks</a>
+      </nav>
+    </aside>
+    <main>
+      <h1>API Authentication & Token Management</h1>
+      <p>
+        All HTTP requests to the REST API must be authenticated over HTTPS using an API Bearer token in the <code>Authorization</code> request header.
+      </p>
+
+      <h2>Obtaining Your API Key</h2>
+      <p>
+        Generate a secure API key from your <a href="https://example.com/dashboard/api-keys">Developer Dashboard</a>. Keep your secret keys confidential and never commit them into public version control repositories.
+      </p>
+
+      <h2>Authentication Headers</h2>
+      <p>Include the token in your HTTP header formatted as follows:</p>
+      <pre><code>Authorization: Bearer YOUR_API_SECRET_KEY</code></pre>
+
+      <h2>Token Expiration & Rotation</h2>
+      <p>
+        Session tokens expire after 24 hours. For automated backend microservices, configure automatic refresh token exchange or use long-lived service account tokens with scoped permissions.
+      </p>
+    </main>
+  </div>
+</body>
+</html>

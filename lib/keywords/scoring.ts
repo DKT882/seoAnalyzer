@@ -49,13 +49,13 @@ export function calculateKeywordScore(input: KeywordScoringInput): KeywordScorin
   if (input.inAnchor) locationScore += KEYWORD_LOCATION_WEIGHTS.ANCHOR_TEXT; // +5
   if (input.inAlt) locationScore += KEYWORD_LOCATION_WEIGHTS.IMAGE_ALT; // +5
 
-  // 4. Keyword Stuffing / Repetition Penalty
+  // 4. Keyword Overuse / Repetition Penalty (Multi-signal model)
   let stuffingPenalty = 0;
   let isStuffingRisk = false;
 
-  if (input.density > 5.0) {
+  if (input.density > 5.0 && (input.frequency >= 3 || input.density > 8.0)) {
     isStuffingRisk = true;
-    stuffingPenalty = parseFloat(((input.density - 5.0) * 10).toFixed(1));
+    stuffingPenalty = parseFloat((Math.min(30, (input.density - 5.0) * 8)).toFixed(1));
   }
 
   // 5. Total Aggregated & Bounded Score

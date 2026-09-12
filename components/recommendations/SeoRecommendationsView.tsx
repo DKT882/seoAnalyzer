@@ -247,6 +247,71 @@ export function SeoRecommendationsView({ recommendations, onSelectPage }: SeoRec
                   <strong style={{ color: 'var(--primary)' }}>Recommended Action:</strong> {item.recommendedAction}
                 </div>
               </div>
+
+              {/* Structured Before / After Comparison */}
+              {(item.before || item.after) && (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: item.before && item.after ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr',
+                    gap: '0.75rem',
+                  }}
+                >
+                  {item.before && (
+                    <div
+                      style={{
+                        background: 'rgba(244, 63, 94, 0.06)',
+                        border: '1px solid rgba(244, 63, 94, 0.25)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '0.65rem 0.85rem',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: 'var(--accent-rose)', marginBottom: '0.25rem' }}>
+                        ❌ Example Before:
+                      </div>
+                      <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                        {item.before}
+                      </pre>
+                    </div>
+                  )}
+
+                  {item.after && (
+                    <div
+                      style={{
+                        background: 'rgba(16, 185, 129, 0.06)',
+                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '0.65rem 0.85rem',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', marginBottom: '0.25rem' }}>
+                        ✅ Example After:
+                      </div>
+                      <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                        {item.after}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Actionable Caution Note */}
+              {item.caution && (
+                <div
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    borderLeft: '3px solid var(--accent-amber)',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  <strong style={{ color: 'var(--accent-amber)' }}>⚠️ Caution:</strong> {item.caution}
+                </div>
+              )}
             </div>
           );
         })}

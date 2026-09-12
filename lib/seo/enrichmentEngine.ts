@@ -8,7 +8,7 @@ import {
 import { seoProviderRepository } from '../db/repository';
 import { calculateOpportunityScore } from './opportunityScorer';
 import { isStructuralArtifact } from '../nlp/artifactFilter';
-import { KeywordItem, SearchIntent } from '@/types';
+import { KeywordItem, SearchIntent, KeywordSource } from '@/types';
 import { logger } from '../utils/logger';
 
 export interface EnrichmentOptions {
@@ -115,7 +115,7 @@ export class KeywordEnrichmentEngine {
           : 'Incorporate into H2 headings and meta description';
       }
 
-      const sources: ('EXTRACTED' | 'RECOMMENDED' | 'COMPETITOR_GAP' | 'EXTERNAL')[] = [];
+      const sources: KeywordSource[] = [];
       if (item.source) {
         sources.push(item.source);
       } else {

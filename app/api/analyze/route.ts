@@ -12,6 +12,8 @@ const analyzeRequestSchema = z.object({
   url: z.string().min(1, 'URL is required'),
   checkRobots: z.boolean().optional().default(true),
   checkSitemap: z.boolean().optional().default(true),
+  targetKeywords: z.union([z.array(z.string()), z.string()]).optional(),
+  renderMode: z.enum(['static', 'browser', 'auto']).optional().default('auto'),
 });
 
 export async function POST(request: NextRequest) {
@@ -30,8 +32,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { url, checkRobots, checkSitemap } = parseResult.data;
-    logger.info(`[API /api/analyze] Request received for: "${url}"`);
+    const { url, checkRobots, checkSitemap, targetKeywords, renderMode } = parseResult.data;
+    logger.info(`[API /api/analyze] Request received for: "${url}" (renderMode: ${renderMode})`);
 
     // 1. Initial URL validation
     const validation = validateAndNormalizeUrl(url);
@@ -62,7 +64,10 @@ export async function POST(request: NextRequest) {
       const report = await generateSeoReport(normalizedUrl, {
         checkRobots,
         checkSitemap,
+        targetKeywords,
+        renderMode,
       });
+
 
       // 4. Save to Database
       jobRepository.saveReport(job.id, report);

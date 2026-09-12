@@ -16,6 +16,10 @@ import {
   XCircle,
   ExternalLink,
   Key,
+  Cpu,
+  Layers,
+  Zap,
+  Info,
 } from 'lucide-react';
 
 interface OverviewDashboardProps {
@@ -80,6 +84,16 @@ export function OverviewDashboard({ report, onNavigateTab, onSelectKeyword }: Ov
                 Noindex Blocked
               </span>
             )}
+
+            {report.analysisMode === 'STATIC_AND_RENDERED' ? (
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-purple)', background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-sm)' }}>
+                🌐 Static + Browser Rendered
+              </span>
+            ) : (
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-subtle)', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-sm)' }}>
+                ⚡ Static HTML Analysis
+              </span>
+            )}
           </div>
 
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', wordBreak: 'break-all', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -90,7 +104,7 @@ export function OverviewDashboard({ report, onNavigateTab, onSelectKeyword }: Ov
           </h2>
 
           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-            Analyzed in <strong>{report.durationMs}ms</strong> | Page Size: <strong>{formatBytes(report.technical.pageSizeBytes)}</strong> | Response Time: <strong>{report.technical.responseTimeMs}ms</strong>
+            Analyzed in <strong>{report.durationMs}ms</strong> {report.browserRenderStatus?.durationMs ? `(Browser: ${report.browserRenderStatus.durationMs}ms) ` : ''}| Page Size: <strong>{formatBytes(report.technical.pageSizeBytes)}</strong> | Response Time: <strong>{report.technical.responseTimeMs}ms</strong>
           </div>
         </div>
 
@@ -116,6 +130,251 @@ export function OverviewDashboard({ report, onNavigateTab, onSelectKeyword }: Ov
           </button>
         </div>
       </div>
+
+      {/* Keyword / Topic Analysis Mode Status Banner */}
+      {(() => {
+        const topicData = report.topicCoverageData;
+        const isTargetMode = topicData?.mode === 'TARGET_KEYWORD_ANALYSIS';
+        const targetKws = topicData?.targetKeywords || report.targetKeywords || [];
+
+        return (
+          <div
+            style={{
+              background: isTargetMode ? 'rgba(99, 102, 241, 0.08)' : 'rgba(6, 182, 212, 0.08)',
+              border: `1px solid ${isTargetMode ? 'rgba(99, 102, 241, 0.3)' : 'rgba(6, 182, 212, 0.3)'}`,
+              borderRadius: 'var(--radius-lg)',
+              padding: '1.25rem 1.75rem',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    padding: '0.2rem 0.6rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: isTargetMode ? 'var(--primary)' : 'var(--accent-cyan)',
+                    color: '#fff',
+                  }}
+                >
+                  {isTargetMode ? '🎯 Target Keyword Analysis Mode' : '🔍 Automatic Page Topic Analysis Mode'}
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  {isTargetMode
+                    ? `Analyzing against ${targetKws.length} user-supplied target keyword(s)`
+                    : 'Target keywords were not provided. Analysis is based on topics extracted from the webpage.'}
+                </span>
+              </div>
+              {isTargetMode && targetKws.length > 0 && (
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                  <strong>Target Keywords:</strong> {targetKws.join(', ')}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  {isTargetMode ? 'Target Keyword Coverage' : 'Topic Coverage'}
+                </div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {topicData?.coveragePercentage ?? report.contentContribution?.topicCoverageScore ?? 100}%
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  {isTargetMode ? 'Target Match Count' : 'Primary Topics'}
+                </div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--accent-emerald)' }}>
+                  {isTargetMode ? targetKws.length : (topicData?.primaryTopicsDetected?.length || report.keywords.primary.length)}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Browser Rendering & Hydration Delta Section (when available or attempted) */}
+      {report.hydrationDelta && (
+        <div
+          style={{
+            background: 'var(--bg-glass-card)',
+            border: '1px solid rgba(168, 85, 247, 0.25)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1.5rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+          }}
+        >
+          {/* Header row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-purple)' }}>
+                <Cpu size={18} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                  Browser Rendering & Hydration Delta
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.1rem 0 0 0' }}>
+                  Comparing initial static HTML against JavaScript-rendered DOM snapshot.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-emerald)', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>
+                ✓ Rendered in {report.browserRenderStatus?.durationMs ?? 0}ms
+              </span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {report.hydrationDelta.seoRelevantChangeCount} SEO change{report.hydrationDelta.seoRelevantChangeCount === 1 ? '' : 's'} detected
+              </span>
+            </div>
+          </div>
+
+          {/* Snapshot Comparison Metrics */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+            {/* Word Count Delta */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '0.9rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Visible Word Count</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.35rem' }}>
+                <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {report.hydrationDelta.renderedSnapshot.wordCount}
+                </span>
+                <span style={{ fontSize: '0.8rem', color: report.hydrationDelta.changed.wordCountDelta > 0 ? 'var(--accent-emerald)' : 'var(--text-muted)' }}>
+                  ({report.hydrationDelta.staticSnapshot.wordCount} static {report.hydrationDelta.changed.wordCountDelta >= 0 ? `+${report.hydrationDelta.changed.wordCountDelta}` : report.hydrationDelta.changed.wordCountDelta})
+                </span>
+              </div>
+            </div>
+
+            {/* H1 Comparison */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '0.9rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>H1 Status</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '0.35rem' }}>
+                {report.hydrationDelta.staticSnapshot.h1Count === 0 && report.hydrationDelta.renderedSnapshot.h1Count > 0 ? (
+                  <span style={{ color: 'var(--accent-cyan)' }}>Injected via JS ({report.hydrationDelta.renderedSnapshot.h1Count})</span>
+                ) : report.hydrationDelta.renderedSnapshot.h1Count === 1 ? (
+                  <span style={{ color: 'var(--accent-emerald)' }}>Optimal (1 H1)</span>
+                ) : report.hydrationDelta.renderedSnapshot.h1Count > 1 ? (
+                  <span style={{ color: 'var(--accent-amber)' }}>Multiple ({report.hydrationDelta.renderedSnapshot.h1Count} H1s)</span>
+                ) : (
+                  <span style={{ color: 'var(--accent-rose)' }}>Missing (0 H1)</span>
+                )}
+              </div>
+            </div>
+
+            {/* Links Count */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '0.9rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Links Hydrated</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.35rem' }}>
+                <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {report.hydrationDelta.renderedSnapshot.totalLinksCount}
+                </span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  ({report.hydrationDelta.staticSnapshot.totalLinksCount} static)
+                </span>
+              </div>
+            </div>
+
+            {/* Structured Data */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '0.9rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Schemas Found</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.35rem' }}>
+                <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {report.hydrationDelta.renderedSnapshot.schemasCount}
+                </span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  ({report.hydrationDelta.staticSnapshot.schemasCount} static)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Discrepancies & Hydration Insights List */}
+          {report.hydrationDelta.discrepancies.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Hydration Insights & Discrepancies:
+              </div>
+              {report.hydrationDelta.discrepancies.map((disc, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background:
+                      disc.severity === 'CRITICAL'
+                        ? 'rgba(244, 63, 94, 0.08)'
+                        : disc.severity === 'WARNING'
+                        ? 'rgba(245, 158, 11, 0.08)'
+                        : 'rgba(99, 102, 241, 0.08)',
+                    borderLeft: `3px solid ${
+                      disc.severity === 'CRITICAL'
+                        ? 'var(--accent-rose)'
+                        : disc.severity === 'WARNING'
+                        ? 'var(--accent-amber)'
+                        : 'var(--primary)'
+                    }`,
+                    fontSize: '0.825rem',
+                  }}
+                >
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.15rem' }}>
+                    {disc.title}
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)' }}>{disc.message}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: '0.825rem', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <CheckCircle size={15} />
+              <span>Static HTML and Rendered DOM are in complete alignment. No hydration discrepancies detected.</span>
+            </div>
+          )}
+
+          {/* Synthetic Performance Telemetry */}
+          {report.browserPerformance && (
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                ⚡ Synthetic Telemetry: Navigation: <strong>{report.browserPerformance.navigationTimingMs ?? 'N/A'}ms</strong> | DOMContentLoaded: <strong>{report.browserPerformance.domContentLoadedMs ?? 'N/A'}ms</strong> | Load: <strong>{report.browserPerformance.loadEventMs ?? 'N/A'}ms</strong>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                {report.browserPerformance.cruxNotice}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fallback Note when Browser Rendering was attempted but failed */}
+      {!report.hydrationDelta && report.browserRenderStatus?.attempted && !report.browserRenderStatus?.successful && (
+        <div
+          style={{
+            background: 'rgba(245, 158, 11, 0.06)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.85rem 1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            fontSize: '0.85rem',
+            color: 'var(--accent-amber)',
+          }}
+        >
+          <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+          <div>
+            <strong>Browser rendering fallback:</strong> Playwright rendering was unavailable or timed out ({report.browserRenderStatus.fallbackReason || 'Headless browser launch skipped'}). Results are based entirely on the high-fidelity initial HTML response.
+          </div>
+        </div>
+      )}
 
       {/* Hero Score Gauge & 5 Category Cards */}
       <div

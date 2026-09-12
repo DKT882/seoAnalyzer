@@ -178,19 +178,25 @@ export function ContentContributionView({ contribution }: ContentContributionVie
           {/* Metrics Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
             <div style={{ background: 'rgba(0, 0, 0, 0.15)', padding: '0.85rem', borderRadius: 'var(--radius-sm)' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Keyword Coverage</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {contribution.isTargetMode ? 'Target Keyword Coverage' : 'Topic Coverage'}
+              </div>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '0.2rem' }}>
                 {selectedSection.keywordCoverageRatio}%
               </div>
             </div>
             <div style={{ background: 'rgba(0, 0, 0, 0.15)', padding: '0.85rem', borderRadius: 'var(--radius-sm)' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Primary Keywords Detected</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {contribution.isTargetMode ? 'Target Keywords Detected' : 'Primary Topics Detected'}
+              </div>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '0.2rem' }}>
                 {selectedSection.primaryKeywordCount}
               </div>
             </div>
             <div style={{ background: 'rgba(0, 0, 0, 0.15)', padding: '0.85rem', borderRadius: 'var(--radius-sm)' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Secondary Keywords Detected</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {contribution.isTargetMode ? 'Secondary Target Keywords' : 'Secondary Topics Detected'}
+              </div>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '0.2rem' }}>
                 {selectedSection.secondaryKeywordCount}
               </div>

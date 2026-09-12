@@ -19,16 +19,29 @@ export interface ContentContributionInput {
   keywords: KeywordItem[];
   entities: EntityItem[];
   pageUrl: string;
+  targetKeywords?: string[];
 }
 
 export function calculateContentContribution(
   input: ContentContributionInput
 ): ContentContributionAnalysis {
-  const { onPage, links, images, schemas, keywords, entities } = input;
+  const { onPage, links, images, schemas, keywords, entities, targetKeywords } = input;
 
-  const primaryKeywords = keywords.filter((k) => k.category === 'primary').map((k) => k.keyword.toLowerCase());
-  const secondaryKeywords = keywords.filter((k) => k.category === 'secondary').map((k) => k.keyword.toLowerCase());
-  const entityNames = entities.map((e) => e.name.toLowerCase());
+  const hasTargetKeywords = Array.isArray(targetKeywords) && targetKeywords.length > 0;
+  const cleanTargetKeywords = hasTargetKeywords
+    ? targetKeywords.map((k) => k.toLowerCase().trim()).filter(Boolean)
+    : [];
+
+  const primaryKeywords = keywords
+    .filter((k) => k.category === 'primary')
+    .map((k) => k.keyword.toLowerCase().trim());
+  const secondaryKeywords = keywords
+    .filter((k) => k.category === 'secondary')
+    .map((k) => k.keyword.toLowerCase().trim());
+  const entityNames = entities.map((e) => e.name.toLowerCase().trim());
+
+  const activeFocusTerms = hasTargetKeywords && cleanTargetKeywords.length > 0 ? cleanTargetKeywords : primaryKeywords;
+  const primaryTopic = activeFocusTerms[0] || onPage.title || 'General Subject';
 
   const checkKeywordsInText = (text: string, kwList: string[]): string[] => {
     const textLower = text.toLowerCase();
@@ -40,23 +53,31 @@ export function calculateContentContribution(
 
   // 1. TITLE
   const titleText = onPage.title || '';
-  const titleKws = checkKeywordsInText(titleText, primaryKeywords);
-  const titleSecKws = checkKeywordsInText(titleText, secondaryKeywords);
+  const titleMatches = checkKeywordsInText(titleText, activeFocusTerms);
+  const titleSecMatches = checkKeywordsInText(titleText, secondaryKeywords);
   let titleScore = 0;
   const titleFindings: string[] = [];
   const titleRecs: string[] = [];
 
   if (titleText) {
     titleScore += 40;
-    if (titleKws.length > 0) {
+    if (titleMatches.length > 0) {
       titleScore += 40;
-      titleFindings.push(`Contains primary target keyword(s): "${titleKws.join(', ')}"`);
+      titleFindings.push(
+        hasTargetKeywords
+          ? `Contains target keyword(s): "${titleMatches.join(', ')}"`
+          : `Reflects primary page topic: "${titleMatches.join(', ')}"`
+      );
     } else {
-      titleRecs.push('Include your highest-priority keyword in the <title> tag.');
+      titleRecs.push(
+        hasTargetKeywords
+          ? `Consider naturally incorporating the target topic "${cleanTargetKeywords[0]}" into the <title> tag.`
+          : `Consider naturally reflecting the page's primary topic ("${primaryTopic}") in the <title> tag.`
+      );
     }
-    if (titleText.length >= 40 && titleText.length <= 65) {
+    if (titleText.length >= 35 && titleText.length <= 65) {
       titleScore += 20;
-      titleFindings.push(`Optimal length (${titleText.length} characters).`);
+      titleFindings.push(`Optimal title length (${titleText.length} characters).`);
     }
   } else {
     titleRecs.push('Missing <title> tag. Add a descriptive title immediately.');
@@ -67,20 +88,28 @@ export function calculateContentContribution(
     sectionName: 'Page Title (<title>)',
     weight: CONTENT_SECTION_WEIGHTS.TITLE,
     signalScore: Math.min(100, titleScore),
-    keywordCoverageRatio: primaryKeywords.length > 0 ? Math.round((titleKws.length / primaryKeywords.length) * 100) : 50,
-    primaryKeywordCount: titleKws.length,
-    secondaryKeywordCount: titleSecKws.length,
+    keywordCoverageRatio:
+      activeFocusTerms.length > 0 ? Math.round((titleMatches.length / activeFocusTerms.length) * 100) : 50,
+    primaryKeywordCount: titleMatches.length,
+    secondaryKeywordCount: titleSecMatches.length,
     prominenceRank: 1,
     contentDepthWordCount: titleText.split(/\s+/).filter(Boolean).length,
-    findings: titleFindings.length > 0 ? titleFindings : ['Title does not currently target primary extracted keywords.'],
+    findings:
+      titleFindings.length > 0
+        ? titleFindings
+        : [
+            hasTargetKeywords
+              ? 'Title does not currently contain supplied target keywords.'
+              : 'Title does not prominently reflect primary extracted topics.',
+          ],
     recommendations: titleRecs,
   });
 
   // 2. H1 HEADING
   const h1Items = onPage.headings.items.filter((h) => h.level === 1);
   const h1Text = h1Items.map((h) => h.text).join(' ');
-  const h1Kws = checkKeywordsInText(h1Text, primaryKeywords);
-  const h1SecKws = checkKeywordsInText(h1Text, secondaryKeywords);
+  const h1Matches = checkKeywordsInText(h1Text, activeFocusTerms);
+  const h1SecMatches = checkKeywordsInText(h1Text, secondaryKeywords);
   let h1Score = 0;
   const h1Findings: string[] = [];
   const h1Recs: string[] = [];
@@ -88,18 +117,38 @@ export function calculateContentContribution(
   if (h1Items.length === 1) {
     h1Score += 40;
     h1Findings.push('Single, clear <h1> tag present.');
-    if (h1Kws.length > 0) {
+
+    if (h1Matches.length > 0) {
       h1Score += 50;
-      h1Findings.push(`Targets primary keyword(s): "${h1Kws.join(', ')}"`);
+      h1Findings.push(
+        hasTargetKeywords
+          ? `Targets supplied keyword: "${h1Matches.join(', ')}"`
+          : `Communicates primary page topic: "${h1Matches.join(', ')}"`
+      );
     } else {
-      h1Recs.push('Incorporate primary target keyword into the <h1> headline.');
+      h1Findings.push(
+        hasTargetKeywords
+          ? `H1 does not clearly align with the supplied target keyword ("${cleanTargetKeywords[0]}").`
+          : `H1 has weak alignment with the primary topic identified from the page content ("${primaryTopic}").`
+      );
+      h1Recs.push(
+        hasTargetKeywords
+          ? `Consider naturally incorporating the primary target topic into the <h1> headline while keeping it readable.`
+          : `Rewrite the <h1> headline so it clearly describes the page's primary topic ("${primaryTopic}").`
+      );
     }
     h1Score += 10;
   } else if (h1Items.length > 1) {
-    h1Score += 30;
-    h1Recs.push('Consolidate multiple H1 headings into a single primary H1.');
+    h1Score += 25;
+    h1Findings.push(`Multiple <h1> headings detected (${h1Items.length} found).`);
+    h1Recs.push('Keep one clear primary H1 for the page and restructure the other headings as H2/H3 where they represent subsections.');
   } else {
-    h1Recs.push('Add an <h1> heading containing your main topic keyword.');
+    h1Findings.push('No <h1> heading detected.');
+    h1Recs.push(
+      hasTargetKeywords
+        ? `Add an <h1> heading defining the primary subject and naturally featuring "${cleanTargetKeywords[0]}".`
+        : `Add an <h1> heading defining the primary subject of the page.`
+    );
   }
 
   sections.push({
@@ -107,12 +156,13 @@ export function calculateContentContribution(
     sectionName: 'Primary Heading (<h1>)',
     weight: CONTENT_SECTION_WEIGHTS.H1,
     signalScore: Math.min(100, h1Score),
-    keywordCoverageRatio: primaryKeywords.length > 0 ? Math.round((h1Kws.length / primaryKeywords.length) * 100) : 50,
-    primaryKeywordCount: h1Kws.length,
-    secondaryKeywordCount: h1SecKws.length,
+    keywordCoverageRatio:
+      activeFocusTerms.length > 0 ? Math.round((h1Matches.length / activeFocusTerms.length) * 100) : 50,
+    primaryKeywordCount: h1Matches.length,
+    secondaryKeywordCount: h1SecMatches.length,
     prominenceRank: 2,
     contentDepthWordCount: h1Text.split(/\s+/).filter(Boolean).length,
-    findings: h1Findings.length > 0 ? h1Findings : ['H1 heading lacks clear keyword alignment.'],
+    findings: h1Findings,
     recommendations: h1Recs,
   });
 
@@ -130,7 +180,7 @@ export function calculateContentContribution(
     weight: CONTENT_SECTION_WEIGHTS.INTRODUCTION,
     signalScore: Math.min(100, introScore),
     keywordCoverageRatio: 70,
-    primaryKeywordCount: Math.min(2, primaryKeywords.length),
+    primaryKeywordCount: Math.min(2, activeFocusTerms.length),
     secondaryKeywordCount: Math.min(3, secondaryKeywords.length),
     prominenceRank: 3,
     contentDepthWordCount: Math.min(200, onPage.wordCount),
@@ -141,8 +191,8 @@ export function calculateContentContribution(
   // 4. H2/H3 SUBHEADINGS
   const subHeadings = onPage.headings.items.filter((h) => h.level === 2 || h.level === 3);
   const subText = subHeadings.map((h) => h.text).join(' ');
-  const subKws = checkKeywordsInText(subText, primaryKeywords);
-  const subSecKws = checkKeywordsInText(subText, secondaryKeywords);
+  const subMatches = checkKeywordsInText(subText, activeFocusTerms);
+  const subSecMatches = checkKeywordsInText(subText, secondaryKeywords);
   let subScore = 0;
   const subFindings: string[] = [];
   const subRecs: string[] = [];
@@ -150,11 +200,15 @@ export function calculateContentContribution(
   if (subHeadings.length >= 3) {
     subScore += 50;
     subFindings.push(`${subHeadings.length} subheadings (H2/H3) structure the article.`);
-    if (subSecKws.length >= 2 || subKws.length >= 1) {
+    if (subSecMatches.length >= 2 || subMatches.length >= 1) {
       subScore += 40;
-      subFindings.push(`Subheadings cover secondary keywords: "${subSecKws.slice(0, 3).join(', ')}"`);
+      subFindings.push(
+        hasTargetKeywords
+          ? `Subheadings reinforce topical coverage: "${subSecMatches.slice(0, 3).join(', ')}"`
+          : `Subheadings cover secondary topics: "${subSecMatches.slice(0, 3).join(', ')}"`
+      );
     } else {
-      subRecs.push('Add secondary and long-tail keywords to H2/H3 subheadings.');
+      subRecs.push('Add secondary and supporting subtopics to H2/H3 subheadings to improve section hierarchy.');
     }
     subScore += 10;
   } else {
@@ -167,9 +221,10 @@ export function calculateContentContribution(
     sectionName: 'Subheadings (<h2> & <h3>)',
     weight: CONTENT_SECTION_WEIGHTS.H2_H3,
     signalScore: Math.min(100, subScore),
-    keywordCoverageRatio: secondaryKeywords.length > 0 ? Math.round((subSecKws.length / secondaryKeywords.length) * 100) : 40,
-    primaryKeywordCount: subKws.length,
-    secondaryKeywordCount: subSecKws.length,
+    keywordCoverageRatio:
+      secondaryKeywords.length > 0 ? Math.round((subSecMatches.length / secondaryKeywords.length) * 100) : 40,
+    primaryKeywordCount: subMatches.length,
+    secondaryKeywordCount: subSecMatches.length,
     prominenceRank: 4,
     contentDepthWordCount: subText.split(/\s+/).filter(Boolean).length,
     findings: subFindings.length > 0 ? subFindings : ['Limited subheading depth detected.'],
@@ -202,7 +257,7 @@ export function calculateContentContribution(
     weight: CONTENT_SECTION_WEIGHTS.BODY_PARAGRAPHS,
     signalScore: bodyScore,
     keywordCoverageRatio: 85,
-    primaryKeywordCount: primaryKeywords.length,
+    primaryKeywordCount: activeFocusTerms.length,
     secondaryKeywordCount: secondaryKeywords.length,
     prominenceRank: 5,
     contentDepthWordCount: onPage.wordCount,
@@ -239,9 +294,8 @@ export function calculateContentContribution(
 
   // 7. LISTS & SCANNABILITY
   let listScore = onPage.listsCount >= 3 ? 90 : onPage.listsCount > 0 ? 70 : 35;
-  const listFindings = onPage.listsCount > 0
-    ? [`${onPage.listsCount} list(s) detected aiding readability.`]
-    : ['No lists detected.'];
+  const listFindings =
+    onPage.listsCount > 0 ? [`${onPage.listsCount} list(s) detected aiding readability.`] : ['No lists detected.'];
   const listRecs = onPage.listsCount === 0 ? ['Add bulleted or numbered lists for key takeaways.'] : [];
 
   sections.push({
@@ -260,10 +314,11 @@ export function calculateContentContribution(
 
   // 8. INTERNAL LINKING
   let linkScore = links.internalLinksCount >= 5 ? 90 : links.internalLinksCount > 0 ? 65 : 25;
-  const linkFindings = links.internalLinksCount > 0
-    ? [`${links.internalLinksCount} internal links connect topic clusters.`]
-    : ['No internal links detected.'];
-  const linkRecs = links.internalLinksCount < 3 ? ['Add contextual internal links to related guides.'] : [];
+  const linkFindings =
+    links.internalLinksCount > 0
+      ? [`${links.internalLinksCount} internal links connect related content.`]
+      : ['No internal links detected.'];
+  const linkRecs = links.internalLinksCount < 3 ? ['Add contextual internal links to related guides or category pages.'] : [];
 
   sections.push({
     sectionId: 'links',
@@ -271,7 +326,7 @@ export function calculateContentContribution(
     weight: CONTENT_SECTION_WEIGHTS.INTERNAL_LINKS,
     signalScore: linkScore,
     keywordCoverageRatio: links.internalLinksCount > 0 ? 70 : 10,
-    primaryKeywordCount: Math.min(2, primaryKeywords.length),
+    primaryKeywordCount: Math.min(2, activeFocusTerms.length),
     secondaryKeywordCount: Math.min(3, secondaryKeywords.length),
     prominenceRank: 8,
     contentDepthWordCount: links.internalLinksCount * 5,
@@ -281,7 +336,9 @@ export function calculateContentContribution(
 
   // 9. IMAGE ALT TEXT
   let altScore = images.altCoverageRatio >= 90 ? 95 : images.altCoverageRatio >= 60 ? 70 : 30;
-  const altFindings = [`${images.withAlt} of ${images.totalImages} images have ALT text (${Math.round(images.altCoverageRatio)}% coverage).`];
+  const altFindings = [
+    `${images.withAlt} of ${images.totalImages} images have ALT text (${Math.round(images.altCoverageRatio)}% coverage).`,
+  ];
   const altRecs = images.missingAlt > 0 ? [`Add descriptive ALT text to ${images.missingAlt} image(s).`] : [];
 
   sections.push({
@@ -326,7 +383,7 @@ export function calculateContentContribution(
       sectionName: sec.sectionName,
       signalScore: sec.signalScore,
       intensity,
-      primaryKeywordsFound: primaryKeywords.slice(0, 2),
+      primaryKeywordsFound: activeFocusTerms.slice(0, 2),
       entitiesFound: entityNames.slice(0, 3),
       recommendation: sec.recommendations[0] || 'Optimized section signal.',
     });
@@ -342,10 +399,18 @@ export function calculateContentContribution(
   const strongestSection = sortedSections[0]?.sectionName || 'Body Content';
   const weakestSection = sortedSections[sortedSections.length - 1]?.sectionName || 'Structured Data';
 
+  // Calculate Topic Coverage Score across sections (0-100)
+  const topicCoverageScore = Math.round(
+    sections.reduce((acc, sec) => acc + (sec.keywordCoverageRatio || 0) * sec.weight, 0)
+  );
+
   const summary = `Estimated SEO Content Contribution is ${overallContributionScore}/100. Strongest signal area is ${strongestSection}, while ${weakestSection} presents the primary optimization opportunity.`;
 
   return {
     overallContributionScore,
+    topicCoverageScore,
+    isTargetMode: hasTargetKeywords,
+    targetKeywordsCount: cleanTargetKeywords.length,
     sections,
     heatmap,
     strongestSection,

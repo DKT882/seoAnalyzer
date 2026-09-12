@@ -63,7 +63,7 @@ export function extractTagExplorerData(
     let titleRec = 'Title length and format is within standard 50-60 character best practices.';
     if (titleLen < 30) {
       titleStatus = 'WARNING';
-      titleRec = 'Title is relatively short (<30 chars). Consider adding core target keywords.';
+      titleRec = 'Title is relatively short (<30 chars). Consider adding descriptive topic keywords and brand context.';
     } else if (titleLen > 65) {
       titleStatus = 'WARNING';
       titleRec = 'Title exceeds 65 characters and may be truncated in search results snippets.';

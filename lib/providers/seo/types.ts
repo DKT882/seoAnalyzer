@@ -1,4 +1,4 @@
-import { KeywordCategory, SearchIntent } from '@/types';
+import { KeywordCategory, SearchIntent, KeywordSource } from '@/types';
 
 export type ProviderStatus =
   | 'NOT_CONFIGURED'
@@ -113,7 +113,7 @@ export interface SEOOpportunityBreakdown {
 
 export interface EnrichedKeyword {
   keyword: string;
-  sources: ('EXTRACTED' | 'RECOMMENDED' | 'COMPETITOR_GAP' | 'EXTERNAL')[];
+  sources: KeywordSource[];
   category: KeywordCategory;
   internalMetrics: {
     relevanceScore: number;

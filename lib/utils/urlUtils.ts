@@ -32,9 +32,16 @@ export function validateAndNormalizeUrl(rawUrl: string): UrlValidationResult {
       return { isValid: false, error: `Disallowed protocol: "${parsed.protocol}". Only http: and https: are allowed.` };
     }
 
-    const isIp = /^(?:::ffff:)?\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(parsed.hostname) || parsed.hostname.includes(':') || parsed.hostname.startsWith('[');
+    const isNumericIp = /^\d+$/.test(parsed.hostname) || /^0x[0-9a-f]+$/i.test(parsed.hostname);
+    const isIp =
+      /^(?:::ffff:)?\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(parsed.hostname) ||
+      parsed.hostname.includes(':') ||
+      parsed.hostname.startsWith('[') ||
+      isNumericIp;
     const hasDot = parsed.hostname.includes('.');
-    const isLocalhost = parsed.hostname.toLowerCase() === 'localhost';
+    const isLocalhost =
+      parsed.hostname.toLowerCase() === 'localhost' ||
+      parsed.hostname.toLowerCase().startsWith('localhost.');
 
     if (!parsed.hostname || parsed.hostname.length < 3 || (!hasDot && !isIp && !isLocalhost)) {
       return { isValid: false, error: 'Invalid hostname in URL. A valid domain (e.g. domain.com) or IP address is required.' };

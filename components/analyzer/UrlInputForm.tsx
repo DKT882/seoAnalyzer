@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Globe, Shield, Sparkles, CheckSquare, Square, AlertCircle, ArrowRight } from 'lucide-react';
+import { Search, Globe, Shield, Sparkles, CheckSquare, Square, AlertCircle, ArrowRight, Cpu, Zap, Compass } from 'lucide-react';
+import { RenderMode } from '@/types';
 
 export type AnalysisType = 'single' | 'website';
 
@@ -12,7 +13,8 @@ interface UrlInputFormProps {
     pageLimit: number,
     checkRobots: boolean,
     checkSitemap: boolean,
-    primaryKeyword?: string
+    primaryKeyword?: string,
+    renderMode?: RenderMode
   ) => void;
   isLoading: boolean;
   error?: string | null;
@@ -28,6 +30,7 @@ const PRESET_URLS = [
 export function UrlInputForm({ onAnalyze, isLoading, error }: UrlInputFormProps) {
   const [url, setUrl] = useState('');
   const [analysisType, setAnalysisType] = useState<AnalysisType>('website');
+  const [renderMode, setRenderMode] = useState<RenderMode>('auto');
   const [pageLimitPreset, setPageLimitPreset] = useState<'1' | '5' | '10' | '25' | '50' | '100' | 'custom' | 'all'>('10');
   const [customPageCount, setCustomPageCount] = useState<number>(20);
   const [primaryKeyword, setPrimaryKeyword] = useState('');
@@ -58,7 +61,7 @@ export function UrlInputForm({ onAnalyze, isLoading, error }: UrlInputFormProps)
     }
 
     const limit = getEffectivePageLimit();
-    onAnalyze(trimmed, analysisType, limit, checkRobots, checkSitemap, primaryKeyword.trim() || undefined);
+    onAnalyze(trimmed, analysisType, limit, checkRobots, checkSitemap, primaryKeyword.trim() || undefined, renderMode);
   };
 
   const handleSelectPreset = (presetUrl: string) => {
@@ -276,14 +279,14 @@ export function UrlInputForm({ onAnalyze, isLoading, error }: UrlInputFormProps)
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>Focal Keyword:</span>
+            <span style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>Target Keywords (Optional):</span>
             <input
               type="text"
               value={primaryKeyword}
               onChange={(e) => setPrimaryKeyword(e.target.value)}
-              placeholder="Auto-detected if empty"
+              placeholder="e.g. seo analyzer, audit (optional)"
               style={{
-                width: '170px',
+                width: '240px',
                 padding: '0.25rem 0.6rem',
                 background: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid var(--border-subtle)',
@@ -292,6 +295,114 @@ export function UrlInputForm({ onAnalyze, isLoading, error }: UrlInputFormProps)
                 fontSize: '0.8rem',
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Single Page Analysis Mode & Target Keywords Bar */}
+      {analysisType === 'single' && (
+        <div
+          style={{
+            marginTop: '0.75rem',
+            padding: '0.75rem 1rem',
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+            textAlign: 'left',
+          }}
+        >
+          {/* Target Keywords row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              Target Keywords (Optional):
+            </span>
+            <input
+              type="text"
+              value={primaryKeyword}
+              onChange={(e) => setPrimaryKeyword(e.target.value)}
+              placeholder="e.g. seo analyzer, audit tool (comma-separated). Leave empty for Automatic Topic Analysis."
+              style={{
+                flex: 1,
+                padding: '0.35rem 0.65rem',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                color: '#fff',
+                fontSize: '0.825rem',
+              }}
+            />
+          </div>
+
+          {/* Render Mode row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.6rem' }}>
+            <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              Analysis Mode:
+            </span>
+            <div style={{ display: 'inline-flex', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0.15rem', gap: '0.2rem' }}>
+              <button
+                type="button"
+                onClick={() => setRenderMode('auto')}
+                style={{
+                  padding: '0.25rem 0.65rem',
+                  borderRadius: 'var(--radius-xs)',
+                  border: 'none',
+                  background: renderMode === 'auto' ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
+                  color: renderMode === 'auto' ? '#fff' : 'var(--text-muted)',
+                  fontSize: '0.775rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                }}
+              >
+                <Compass size={13} />
+                <span>Auto (Browser + Fallback)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRenderMode('browser')}
+                style={{
+                  padding: '0.25rem 0.65rem',
+                  borderRadius: 'var(--radius-xs)',
+                  border: 'none',
+                  background: renderMode === 'browser' ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
+                  color: renderMode === 'browser' ? '#fff' : 'var(--text-muted)',
+                  fontSize: '0.775rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                }}
+              >
+                <Cpu size={13} />
+                <span>Browser-Rendered (Playwright)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRenderMode('static')}
+                style={{
+                  padding: '0.25rem 0.65rem',
+                  borderRadius: 'var(--radius-xs)',
+                  border: 'none',
+                  background: renderMode === 'static' ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
+                  color: renderMode === 'static' ? '#fff' : 'var(--text-muted)',
+                  fontSize: '0.775rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                }}
+              >
+                <Zap size={13} />
+                <span>Fast Static (HTML only)</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

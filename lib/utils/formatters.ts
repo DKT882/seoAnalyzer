@@ -89,7 +89,22 @@ export function getSeverityStyle(severity: IssueSeverity): {
         borderColor: 'rgba(99, 102, 241, 0.35)',
         label: 'Recommendation',
       };
+    case 'INFO':
+      return {
+        color: '#38bdf8',
+        bgColor: 'rgba(56, 189, 248, 0.15)',
+        borderColor: 'rgba(56, 189, 248, 0.35)',
+        label: 'Info',
+      };
+    case 'NOT_MEASURED':
+      return {
+        color: '#94a3b8',
+        bgColor: 'rgba(148, 163, 184, 0.15)',
+        borderColor: 'rgba(148, 163, 184, 0.35)',
+        label: 'Not Measured',
+      };
     case 'GOOD':
+    default:
       return {
         color: '#10b981',
         bgColor: 'rgba(16, 185, 129, 0.15)',

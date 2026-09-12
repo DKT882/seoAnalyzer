@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { SEOReport, WebsiteCrawlReport, CrawlProgressStats, ContentBrief } from '@/types';
+import { SEOReport, WebsiteCrawlReport, CrawlProgressStats, ContentBrief, RenderMode } from '@/types';
 import { apiClient } from '@/lib/api/apiClient';
 import { Navbar, NavTab } from '@/components/Navbar';
 import { UrlInputForm, AnalysisType } from '@/components/analyzer/UrlInputForm';
@@ -25,6 +25,7 @@ import { HeadingHierarchyView } from '@/components/onpage/HeadingHierarchyView';
 import { MetadataPreviewer } from '@/components/onpage/MetadataPreviewer';
 import { ContentAnalysisView } from '@/components/onpage/ContentAnalysisView';
 import { TechnicalAuditsView } from '@/components/technical/TechnicalAuditsView';
+import { TechnicalSeoIntelligenceView } from '@/components/technical/TechnicalSeoIntelligenceView';
 import { RobotsSitemapView } from '@/components/technical/RobotsSitemapView';
 import { LinksView } from '@/components/links/LinksView';
 import { ImagesView } from '@/components/images/ImagesView';
@@ -166,7 +167,8 @@ function AnalyzerContent() {
     pageLimit: number,
     checkRobots: boolean,
     checkSitemap: boolean,
-    primaryKeyword?: string
+    primaryKeyword?: string,
+    renderMode?: RenderMode
   ) => {
     setError(null);
     setAnalyzingUrl(url);
@@ -184,6 +186,8 @@ function AnalyzerContent() {
           url,
           checkRobots,
           checkSitemap,
+          targetKeywords: primaryKeyword || undefined,
+          renderMode,
         });
 
         if (response.report) {
@@ -498,7 +502,11 @@ function AnalyzerContent() {
                   </div>
                 )}
                 {reportSubTab === 'technical' && (
-                  <TechnicalAuditsView issues={inspectedPageReport.issues} />
+                  <TechnicalSeoIntelligenceView
+                    technical={inspectedPageReport.technical}
+                    onPage={inspectedPageReport.onPage}
+                    issues={inspectedPageReport.issues}
+                  />
                 )}
                 {reportSubTab === 'robots_sitemap' && (
                   <RobotsSitemapView
@@ -729,7 +737,11 @@ function AnalyzerContent() {
 
                 {/* SubTab 6: Technical SEO Audits */}
                 {reportSubTab === 'technical' && (
-                  <TechnicalAuditsView issues={report.issues} />
+                  <TechnicalSeoIntelligenceView
+                    technical={report.technical}
+                    onPage={report.onPage}
+                    issues={report.issues}
+                  />
                 )}
 
                 {/* SubTab 7: Robots.txt & Sitemap */}

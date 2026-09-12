@@ -1,6 +1,6 @@
 export type JobStatus = 'pending' | 'crawling' | 'parsing' | 'analyzing' | 'completed' | 'failed';
 
-export type IssueSeverity = 'CRITICAL' | 'WARNING' | 'RECOMMENDATION' | 'GOOD';
+export type IssueSeverity = 'CRITICAL' | 'WARNING' | 'RECOMMENDATION' | 'GOOD' | 'INFO' | 'NOT_MEASURED';
 
 export type IssueCategory =
   | 'onpage'
@@ -23,11 +23,40 @@ export interface SEOIssue {
   whyItMatters: string;
   recommendation: string;
   affectedElement?: string;
+  issue?: string;
+  evidence?: any;
+  action?: string;
+  whatToChange?: string;
+  before?: string;
+  after?: string;
+  expectedBenefit?: string;
+  caution?: string;
+  isMeasuredProblem?: boolean;
 }
 
 export type NGramType = '1-gram' | '2-gram' | '3-gram' | 'long-tail';
 
-export type KeywordSource = 'EXTRACTED' | 'RECOMMENDED' | 'COMPETITOR_GAP' | 'EXTERNAL';
+export type KeywordSource = 'EXTRACTED' | 'RECOMMENDED' | 'COMPETITOR_GAP' | 'EXTERNAL' | 'USER_TARGET';
+
+export type KeywordAnalysisMode = 'AUTOMATIC_TOPIC_ANALYSIS' | 'TARGET_KEYWORD_ANALYSIS';
+
+export interface TopicCoverageData {
+  mode: KeywordAnalysisMode;
+  targetKeywordsProvided?: boolean;
+  targetKeywords: string[];
+  targetKeywordCoverage?: number; // matched target keywords / total supplied target keywords (0-100%)
+  extractedTopicCoverage?: number; // percentage of primary extracted topics found in structural page signals (0-100%)
+  primaryTopicsDetected?: string[];
+  secondaryTopicsDetected?: string[];
+  primaryTopicsDetectedCount?: number;
+  secondaryTopicsDetectedCount?: number;
+  h1AlignmentStatus?: 'Optimal' | 'Strong' | 'Moderate' | 'Weak' | 'Missing';
+  h1AlignmentType?: 'TARGET_KEYWORD' | 'EXTRACTED_TOPIC';
+  h1AlignmentDetails?: string;
+  coveragePercentage?: number;
+  coverageLabel?: string;
+  explanation: string;
+}
 
 export type KeywordCategory =
   | 'primary'
@@ -221,6 +250,232 @@ export interface SitemapAnalysis {
   parseError?: string;
 }
 
+// ==========================================
+// ADVANCED TECHNICAL SEO INTELLIGENCE TYPES
+// ==========================================
+
+export type CrawlabilityStatus =
+  | 'CRAWLABLE'
+  | 'BLOCKED_BY_ROBOTS'
+  | 'REDIRECTED'
+  | 'HTTP_ERROR'
+  | 'PARTIALLY_MEASURED'
+  | 'NOT_MEASURED';
+
+export type IndexabilityStatus =
+  | 'INDEXABLE'
+  | 'NOT_INDEXABLE'
+  | 'CONDITIONAL'
+  | 'CONFLICTING_SIGNALS'
+  | 'NOT_MEASURED';
+
+export type CanonicalStatus =
+  | 'SELF_CANONICAL'
+  | 'CANONICALIZED_TO_OTHER'
+  | 'CANONICAL_REDIRECT_CONFLICT'
+  | 'CANONICAL_CROSS_DOMAIN'
+  | 'NOINDEX_CANONICAL_CONFLICT'
+  | 'CANONICAL_MISSING'
+  | 'CANONICAL_INVALID';
+
+export type HttpStatusType =
+  | 'OK'
+  | 'PERMANENT_REDIRECT'
+  | 'TEMPORARY_REDIRECT'
+  | 'CLIENT_ERROR'
+  | 'NOT_FOUND'
+  | 'GONE'
+  | 'RATE_LIMITED'
+  | 'SERVER_ERROR'
+  | 'UNKNOWN';
+
+export interface HttpStatusClassification {
+  statusCode: number;
+  statusText: string;
+  type: HttpStatusType;
+  isSuccess: boolean;
+  isRedirect: boolean;
+  isClientError: boolean;
+  isServerError: boolean;
+  description: string;
+}
+
+export interface RedirectAssessment {
+  hasRedirect: boolean;
+  redirectCount: number;
+  redirectChain: string[];
+  isRedirectLoop: boolean;
+  loopUrls?: string[];
+  redirectType: 'NONE' | 'PERMANENT' | 'TEMPORARY' | 'CHAIN' | 'LOOP';
+  isHttpToHttps: boolean;
+  isWwwNormalization: boolean;
+  isTrailingSlashNormalization: boolean;
+  destinationMismatch: boolean;
+  summary: string;
+}
+
+export interface RobotsAssessment {
+  metaRobotsDirectives: string[];
+  googlebotDirectives: string[];
+  bingbotDirectives: string[];
+  xRobotsTagDirectives: string[];
+  hasNoindex: boolean;
+  hasNofollow: boolean;
+  hasContradiction: boolean;
+  hasSignalConflict: boolean;
+  botSpecificOverride: boolean;
+  isBotAllowedInRobotsTxt: boolean;
+  robotsTxtDisallowRule?: string;
+  summary: string;
+}
+
+export interface SitemapAssessment {
+  exists: boolean;
+  sitemapUrl: string;
+  totalUrls: number;
+  isIndex: boolean;
+  membershipStatus: 'IN_SITEMAP' | 'NOT_IN_SITEMAP' | 'SITEMAP_NOT_MEASURED' | 'SITEMAP_UNAVAILABLE';
+  isCanonicalConsistent: boolean;
+  sitemapCanonicalMismatch?: {
+    pageCanonical: string;
+    sitemapEntry: string;
+  };
+  summary: string;
+}
+
+export interface HreflangEntry {
+  lang: string;
+  href: string;
+  isValidCode: boolean;
+  isSelfReference: boolean;
+}
+
+export interface HreflangAssessment {
+  hasHreflang: boolean;
+  totalEntries: number;
+  entries: HreflangEntry[];
+  hasXDefault: boolean;
+  hasDuplicates: boolean;
+  duplicateLanguages: string[];
+  hasSelfReference: boolean;
+  hasInvalidLanguageCodes: boolean;
+  invalidCodes: string[];
+  htmlLang: string;
+  isHtmlLangValid: boolean;
+  isHtmlLangMatched: boolean;
+  summary: string;
+}
+
+export interface UrlStructureAssessment {
+  url: string;
+  length: number;
+  isExcessivelyLong: boolean;
+  queryParamCount: number;
+  hasDuplicateQueryParams: boolean;
+  hasSessionId: boolean;
+  sessionParamNames: string[];
+  hasTrackingParams: boolean;
+  trackingParamNames: string[];
+  hasFragment: boolean;
+  hasRepeatedPathSegments: boolean;
+  hasSpacesOrUnsafeChars: boolean;
+  hasUppercaseLetters: boolean;
+  summary: string;
+}
+
+export interface InternalLinksAssessment {
+  totalInternalLinks: number;
+  uniqueInternalLinks: number;
+  descriptiveAnchorCount: number;
+  genericAnchorCount: number;
+  emptyAnchorCount: number;
+  imageOnlyLinksMissingAltCount: number;
+  nofollowInternalCount: number;
+  brokenInternalLinksCount: number;
+  redirectingInternalLinksCount: number;
+  linkValidationStatus: 'FULL' | 'PARTIAL' | 'NOT_MEASURED';
+  summary: string;
+}
+
+export interface ImagesTechnicalAssessment {
+  totalImages: number;
+  withAlt: number;
+  missingAlt: number;
+  altCoverageRatio: number;
+  imagesMissingDimensionsCount: number;
+  responsiveImagesCount: number;
+  lazyLoadedImagesCount: number;
+  summary: string;
+}
+
+export interface StructuredDataAssessment {
+  totalSchemas: number;
+  schemaTypes: string[];
+  hasValidSyntax: boolean;
+  syntaxErrors: string[];
+  missingContextCount: number;
+  missingTypeCount: number;
+  hasContentMismatch: boolean;
+  contentMismatchDetails?: string;
+  summary: string;
+}
+
+export interface SocialMetadataAssessment {
+  hasOpenGraph: boolean;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogType?: string;
+  hasTwitterCard: boolean;
+  twitterCard?: string;
+  twitterTitle?: string;
+  twitterDescription?: string;
+  twitterImage?: string;
+  summary: string;
+}
+
+export interface MobileAssessment {
+  hasViewportMeta: boolean;
+  viewportContent?: string;
+  isStandardViewport: boolean;
+  summary: string;
+}
+
+export interface InfrastructureAssessment {
+  isHttps: boolean;
+  hasMixedContent: boolean;
+  insecureResourceUrls: string[];
+  contentType: string;
+  isHtmlContentType: boolean;
+  charset: string;
+  securityHeaders: {
+    hsts: boolean;
+    csp: boolean;
+    xContentTypeOptions: boolean;
+    referrerPolicy?: string;
+  };
+  cachingHeaders: {
+    cacheControl?: string;
+    etag?: string;
+    serverTiming?: string;
+    age?: string;
+  };
+  summary: string;
+}
+
+export interface CanonicalizationAssessment {
+  canonicalUrl: string;
+  isSpecified: boolean;
+  isAbsolute: boolean;
+  isMatch: boolean;
+  status: CanonicalStatus;
+  pointsToRedirect: boolean;
+  redirectTarget?: string;
+  isCrossDomain: boolean;
+  hasNoindexConflict: boolean;
+  summary: string;
+}
+
 export interface TechnicalSEO {
   httpStatus: number;
   isHttps: boolean;
@@ -234,6 +489,31 @@ export interface TechnicalSEO {
   charset: string;
   robotsAnalysis: RobotsAnalysis;
   sitemapAnalysis: SitemapAnalysis;
+  // Phase 5 Intelligence Additions
+  crawlabilityStatus?: CrawlabilityStatus;
+  indexabilityStatus?: IndexabilityStatus;
+  canonicalStatus?: CanonicalStatus;
+  httpStatusClassification?: HttpStatusClassification;
+  redirectAssessment?: RedirectAssessment;
+  robotsAssessment?: RobotsAssessment;
+  sitemapAssessment?: SitemapAssessment;
+  canonicalAssessment?: CanonicalizationAssessment;
+  hreflangAssessment?: HreflangAssessment;
+  urlStructureAssessment?: UrlStructureAssessment;
+  internalLinksAssessment?: InternalLinksAssessment;
+  imagesAssessment?: ImagesTechnicalAssessment;
+  structuredDataAssessment?: StructuredDataAssessment;
+  socialMetadataAssessment?: SocialMetadataAssessment;
+  mobileAssessment?: MobileAssessment;
+  infrastructureAssessment?: InfrastructureAssessment;
+}
+
+export interface ScoreDeduction {
+  category: 'onPage' | 'technical' | 'content' | 'links' | 'mobile';
+  ruleCode: string;
+  label: string;
+  pointsDeducted: number;
+  reason: string;
 }
 
 export interface SEOScores {
@@ -243,6 +523,7 @@ export interface SEOScores {
   content: number;
   links: number;
   mobile: number;
+  deductions?: ScoreDeduction[];
 }
 
 // ==========================================
@@ -313,6 +594,9 @@ export interface ContentSignalHeatmapItem {
 
 export interface ContentContributionAnalysis {
   overallContributionScore: number; // 0-100 explainable score
+  topicCoverageScore?: number;
+  isTargetMode?: boolean;
+  targetKeywordsCount?: number;
   sections: ContentSectionContribution[];
   heatmap: ContentSignalHeatmapItem[];
   strongestSection: string;
@@ -475,6 +759,112 @@ export interface DomainOverviewData {
 }
 
 // ==========================================
+// BROWSER RENDERING & HYDRATION DELTA MODELS
+// ==========================================
+export type AnalysisMode = 'STATIC_ONLY' | 'STATIC_AND_RENDERED';
+export type RenderMode = 'static' | 'browser' | 'auto';
+
+export interface PageSnapshot {
+  source: 'static' | 'rendered';
+  url: string;
+  timestamp: string;
+  title: string;
+  titleLength: number;
+  metaDescription: string;
+  metaDescriptionLength: number;
+  canonicalUrl: string;
+  robotsMeta: string;
+  wordCount: number;
+  h1Count: number;
+  h1Text?: string;
+  headingsCount: number;
+  internalLinksCount: number;
+  externalLinksCount: number;
+  totalLinksCount: number;
+  imagesCount: number;
+  missingAltCount: number;
+  schemasCount: number;
+  schemaTypes: string[];
+}
+
+export type HydrationDiscrepancyType =
+  | 'INDEXABILITY_MISMATCH'
+  | 'H1_INTRODUCED'
+  | 'H1_REMOVED'
+  | 'H1_CHANGED'
+  | 'METADATA_CHANGED'
+  | 'JS_CONTENT_DEPENDENCY'
+  | 'SCHEMA_INTRODUCED'
+  | 'LINKS_INTRODUCED'
+  | 'IMAGES_INTRODUCED';
+
+export interface HydrationDiscrepancy {
+  type: HydrationDiscrepancyType;
+  severity: 'CRITICAL' | 'WARNING' | 'INFO';
+  title: string;
+  message: string;
+  staticValue?: string | number;
+  renderedValue?: string | number;
+}
+
+export interface HydrationDelta {
+  staticSnapshot: PageSnapshot;
+  renderedSnapshot: PageSnapshot;
+  seoRelevantChangeCount: number;
+  hasSignificantChange: boolean;
+  added: {
+    headings: string[];
+    linksCount: number;
+    imagesCount: number;
+    structuredData: string[];
+  };
+  removed: {
+    headings: string[];
+    linksCount: number;
+    imagesCount: number;
+    structuredData: string[];
+  };
+  changed: {
+    title?: { static: string; rendered: string };
+    metaDescription?: { static: string; rendered: string };
+    canonical?: { static: string; rendered: string };
+    robots?: { static: string; rendered: string };
+    wordCountDelta: number;
+    h1TextChange?: { static: string; rendered: string };
+  };
+  discrepancies: HydrationDiscrepancy[];
+}
+
+export interface BrowserPerformanceMetrics {
+  syntheticMeasurement: true;
+  navigationTimingMs?: number;
+  domContentLoadedMs?: number;
+  loadEventMs?: number;
+  syntheticLcpMs?: number | 'NOT_MEASURED';
+  syntheticClsScore?: number | 'NOT_MEASURED';
+  cruxNotice: string;
+}
+
+export interface BrowserRenderStatus {
+  attempted: boolean;
+  successful: boolean;
+  renderModeRequested: RenderMode;
+  durationMs?: number;
+  fallbackReason?: string;
+}
+
+export interface BrowserRenderResult {
+  success: boolean;
+  html?: string;
+  finalUrl?: string;
+  statusCode?: number;
+  performance?: BrowserPerformanceMetrics;
+  renderDurationMs?: number;
+  error?: string;
+  errorCode?: string;
+}
+
+// ==========================================
 // MAIN EXPANDED SEO REPORT INTERFACE
 // ==========================================
 export interface SEOReport {
@@ -483,6 +873,13 @@ export interface SEOReport {
   normalizedUrl: string;
   timestamp: string;
   durationMs: number;
+  analysisMode?: AnalysisMode;
+  renderModeRequested?: RenderMode;
+  staticSnapshot?: PageSnapshot;
+  renderedSnapshot?: PageSnapshot;
+  hydrationDelta?: HydrationDelta;
+  browserPerformance?: BrowserPerformanceMetrics;
+  browserRenderStatus?: BrowserRenderStatus;
   scores: SEOScores;
   onPage: OnPageData;
   technical: TechnicalSEO;
@@ -513,6 +910,9 @@ export interface SEOReport {
   tagExplorer: TagExplorerData;
   contentContribution: ContentContributionAnalysis;
   issues: SEOIssue[];
+  targetKeywords?: string[];
+  keywordAnalysisMode?: KeywordAnalysisMode;
+  topicCoverageData?: TopicCoverageData;
   externalSeoDisclaimer: string;
   dataSourceDisclosures: {
     categoryA: string;
@@ -534,9 +934,11 @@ export interface AnalysisJob {
 
 export interface AnalyzeUrlRequest {
   url: string;
+  targetKeywords?: string[] | string;
   checkRobots?: boolean;
   checkSitemap?: boolean;
   useDynamicFallback?: boolean;
+  renderMode?: RenderMode;
 }
 
 export interface AnalyzeUrlResponse {
@@ -726,6 +1128,16 @@ export interface SeoRecommendationItem {
   recommendedAction: string;
   quickWin: boolean;
   scoreImpactEstimate?: number;
+  issue?: string;
+  whyItMatters?: string;
+  evidence?: any;
+  action?: string;
+  whatToChange?: string;
+  before?: string;
+  after?: string;
+  expectedBenefit?: string;
+  caution?: string;
+  isMeasuredProblem?: boolean;
 }
 
 export interface PageRecommendationsSummary {

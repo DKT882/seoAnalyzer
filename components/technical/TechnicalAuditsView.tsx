@@ -184,7 +184,82 @@ export function TechnicalAuditsView({ issues }: TechnicalAuditsViewProps) {
                     <p style={{ color: 'var(--text-primary)', margin: 0, lineHeight: 1.5 }}>
                       {issue.recommendation}
                     </p>
+                    {issue.whatToChange && (
+                      <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <strong>What to Change:</strong> {issue.whatToChange}
+                      </div>
+                    )}
+                    {issue.expectedBenefit && (
+                      <div style={{ marginTop: '0.2rem', fontSize: '0.8rem', color: 'var(--accent-emerald)' }}>
+                        <strong>Expected Benefit:</strong> {issue.expectedBenefit}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Structured Before / After Comparison */}
+                  {(issue.before || issue.after) && (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: issue.before && issue.after ? 'repeat(auto-fit, minmax(240px, 1fr))' : '1fr',
+                        gap: '0.75rem',
+                      }}
+                    >
+                      {issue.before && (
+                        <div
+                          style={{
+                            background: 'rgba(244, 63, 94, 0.06)',
+                            border: '1px solid rgba(244, 63, 94, 0.25)',
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '0.65rem 0.85rem',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, color: 'var(--accent-rose)', marginBottom: '0.25rem' }}>
+                            ❌ Before:
+                          </div>
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                            {issue.before}
+                          </pre>
+                        </div>
+                      )}
+
+                      {issue.after && (
+                        <div
+                          style={{
+                            background: 'rgba(16, 185, 129, 0.06)',
+                            border: '1px solid rgba(16, 185, 129, 0.25)',
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '0.65rem 0.85rem',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', marginBottom: '0.25rem' }}>
+                            ✅ After:
+                          </div>
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                            {issue.after}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Actionable Caution Note */}
+                  {issue.caution && (
+                    <div
+                      style={{
+                        background: 'rgba(245, 158, 11, 0.08)',
+                        borderLeft: '3px solid var(--accent-amber)',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.78rem',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      <strong style={{ color: 'var(--accent-amber)' }}>⚠️ Caution:</strong> {issue.caution}
+                    </div>
+                  )}
 
                   {issue.affectedElement && (
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
