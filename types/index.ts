@@ -1886,5 +1886,7 @@ export interface StartCrawlResponse {
 // ==========================================
 export * from '../lib/search/searchTypes';
 
-
-
+// ==========================================
+// 20. PHASE 9: SEO ACTION ENGINE & WORKFLOW TYPES
+// ==========================================
+export * from '../lib/actions/actionTypes';

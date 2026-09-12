@@ -569,3 +569,25 @@ Phase 8 introduces external search and SERP intelligence into the analysis pipel
 - **Zero Metric Fabrication & Provenance**: Zero fabricated ranking probabilities, traffic estimates, DA/PA, or search volume. Every observation carries structured provenance (`source`, `provider`, `collectedAt`, `device`, `extractionMethod`, `isSyntheticTest`, `fingerprint`).
 
 For complete specifications and API details, see `docs/SEARCH_INTELLIGENCE_GUIDE.md`.
+
+---
+
+## 41. SEO Action Engine & Optimization Workflow (Phase 9)
+
+Phase 9 establishes the unified orchestration and action layer built on top of Phase 1–8:
+
+- **Authoritative Foundation**: Consumes structured outputs from Phase 1–6 (page analysis), Phase 7 (site crawl), and Phase 8 (SERP intelligence) without rewriting or duplicating their authoritative analyzers.
+- **Unified Action Taxonomy**: Defines strict `SeoAction` models across 10 structured categories (`TECHNICAL_INDEXABILITY`, `TECHNICAL_CANONICAL`, `TECHNICAL_PERFORMANCE`, `TECHNICAL_STRUCTURE`, `CONTENT_DEPTH`, `CONTENT_STRUCTURE`, `SEMANTIC_TOPIC`, `INTERNAL_LINKING`, `SEARCH_SERP`, `SITE_WIDE_ARCHITECTURE`).
+- **6-Pillar Evidence Model**: Every recommendation explains: `Observation ➔ Evidence ➔ Interpretation ➔ Action ➔ Expected Benefit ➔ Caution`.
+- **Transparent Optimization Priority**: Computes a deterministic 0–100 score based on severity, affected URL scope, implementation effort ROI, confidence level, and dependency blocker status. Strictly never labeled "Ranking Impact" or "Google Score".
+- **Dependency-Aware Ordering**: Employs DAG topological sorting to ensure prerequisite issues (such as indexability or canonical conflicts) precede dependent optimizations (like on-page text and internal link anchors).
+- **Multi-Finding Consolidation & Site-Wide Grouping**: Merges identical issues across multiple crawled pages into single site-wide action cards with aggregated `affectedUrls` arrays and unified evidence.
+- **Destructive Action Safety Guards**: Flags high-risk operations (canonical changes, noindex tags, robots disallows, 301 redirects, page deletions) with risk levels, caution warnings, and staging verification checklists.
+- **Deterministic Fingerprinting**: Computes SHA-256 issue hashes for audit deduplication, regression tracking, and state persistence.
+- **Action Lifecycle Management**: Supports status workflows (`OPEN` ➔ `IN_PROGRESS` ➔ `IMPLEMENTED` ➔ `VERIFIED` ➔ `DISMISSED` with mandatory reason).
+- **Decoupled Action Store**: Provides both `MemorySeoActionStore` (stateless testing) and `SqliteSeoActionStore` (relational SQLite persistence).
+- **Audit Comparison Engine**: Compares baseline and target audit snapshots, identifying resolved, new, and unchanged actions along with metric deltas.
+- **Interactive Action Center UI**: 8-tab dashboard featuring priority actions, technical, content, semantic, links, SERP, site-wide grouped views, before/after preview drawer, and status switcher.
+- **Zero Fabrication**: Strictly avoids fabricated ranking guarantees, ranking probabilities, traffic estimates, DA, DR, KD, CPC, and PageRank.
+
+For complete implementation details, see `docs/ACTION_ENGINE_GUIDE.md`.

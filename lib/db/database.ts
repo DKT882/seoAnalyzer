@@ -199,10 +199,41 @@ function initSchema(db: Database.Database): void {
       data_json TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS seo_action_plans (
+      id TEXT PRIMARY KEY,
+      domain TEXT NOT NULL,
+      target_url TEXT,
+      plan_json TEXT NOT NULL,
+      total_actions INTEGER NOT NULL,
+      average_priority REAL NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS seo_actions (
+      id TEXT PRIMARY KEY,
+      plan_id TEXT NOT NULL REFERENCES seo_action_plans(id) ON DELETE CASCADE,
+      fingerprint TEXT NOT NULL,
+      category TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      priority INTEGER NOT NULL,
+      priority_level TEXT NOT NULL,
+      status TEXT NOT NULL,
+      title TEXT NOT NULL,
+      is_destructive INTEGER NOT NULL,
+      affected_urls_count INTEGER NOT NULL,
+      action_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_kmd_lookup ON keyword_market_data(keyword, country, language);
     CREATE INDEX IF NOT EXISTS idx_serp_lookup ON serp_results(keyword, country, language);
     CREATE INDEX IF NOT EXISTS idx_provider_cache ON seo_provider_cache(cache_key);
     CREATE INDEX IF NOT EXISTS idx_serp_snapshots_fingerprint ON serp_snapshots(fingerprint);
     CREATE INDEX IF NOT EXISTS idx_serp_snapshots_query ON serp_snapshots(normalized_query);
+    CREATE INDEX IF NOT EXISTS idx_action_plans_domain ON seo_action_plans(domain);
+    CREATE INDEX IF NOT EXISTS idx_seo_actions_plan_id ON seo_actions(plan_id);
+    CREATE INDEX IF NOT EXISTS idx_seo_actions_fingerprint ON seo_actions(fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_seo_actions_status ON seo_actions(status);
   `);
 }
