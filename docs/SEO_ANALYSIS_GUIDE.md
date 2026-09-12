@@ -518,3 +518,19 @@ Phase 5 equips the analyzer with deep technical audits across the complete crawl
 
 For complete technical specifications, see `docs/ADVANCED_TECHNICAL_SEO_GUIDE.md`.
 
+---
+
+## 38. Content & Semantic SEO Intelligence Engine (Phase 6)
+
+Phase 6 implements deep evaluation of content quality, structure, search intent, and topical depth:
+
+- **Contextual Depth Benchmarks**: Tailors depth expectations to page types (Article: 300+ words; Product: 80+ words; Contact: 25+ words) to prevent false-positive "thin content" penalties on valid concise pages.
+- **Conservative Classification**: Classifies page types (`ARTICLE`, `PRODUCT`, `SERVICE`, `LOCAL_BUSINESS`, `DOCUMENTATION`, `FAQ`, `CONTACT`, `UNKNOWN`) and search intent (`INFORMATIONAL`, `COMMERCIAL_INVESTIGATION`, `TRANSACTIONAL`, `LOCAL`, `NAVIGATIONAL`, `MIXED`, `UNKNOWN`) with explicit confidence levels.
+- **Heading-to-Content Support**: Audits whether headings are backed by substantive explanation, flagging empty headings (`CONTENT_HEADING_WITHOUT_SUPPORT`) and topic drift.
+- **Observable Content Gaps**: Identifies unfulfilled heading promises and missing target keywords without fabricating arbitrary topic requirements.
+- **Repetition & Spam Guard**: Detects duplicated sentences and high-density n-gram repetition while protecting legitimate brand and model specifications.
+- **Root-Cause Deduplication**: Calculates an explainable 0-100 `SemanticContentScore` where thin content is penalized once under `CONTENT_INSUFFICIENT_DEPTH` rather than compounding multiple duplicate deductions.
+
+For complete documentation, see `docs/CONTENT_SEMANTIC_INTELLIGENCE_GUIDE.md`.
+
+

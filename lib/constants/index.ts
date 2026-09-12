@@ -103,6 +103,38 @@ export const ISSUE_CODES = {
   H1_KEYWORD_MISMATCH: 'H1_KEYWORD_MISMATCH',
   H1_TOPIC_MISMATCH: 'H1_TOPIC_MISMATCH',
   URL_STRUCTURE_COMPLEX: 'URL_STRUCTURE_COMPLEX',
+
+  // Phase 6 Content & Semantic Intelligence
+  CONTENT_TOPIC_CLARITY: 'CONTENT_TOPIC_CLARITY',
+  CONTENT_TOPIC_GAP: 'CONTENT_TOPIC_GAP',
+  CONTENT_THIN_SECTION: 'CONTENT_THIN_SECTION',
+  CONTENT_HEADING_MISMATCH: 'CONTENT_HEADING_MISMATCH',
+  CONTENT_HEADING_WITHOUT_SUPPORT: 'CONTENT_HEADING_WITHOUT_SUPPORT',
+  CONTENT_REPETITION: 'CONTENT_REPETITION',
+  CONTENT_KEYWORD_OVERUSE: 'CONTENT_KEYWORD_OVERUSE',
+  CONTENT_INTENT_MISMATCH: 'CONTENT_INTENT_MISMATCH',
+  CONTENT_INTRO_WEAK: 'CONTENT_INTRO_WEAK',
+  CONTENT_STRUCTURE_WEAK: 'CONTENT_STRUCTURE_WEAK',
+  CONTENT_BOILERPLATE: 'CONTENT_BOILERPLATE',
+  CONTENT_CONTEXTUAL_DEPTH: 'CONTENT_CONTEXTUAL_DEPTH',
+  CONTENT_FAQ_WEAK: 'CONTENT_FAQ_WEAK',
+  CONTENT_PRODUCT_CONTENT_WEAK: 'CONTENT_PRODUCT_CONTENT_WEAK',
+  CONTENT_SERVICE_CONTENT_WEAK: 'CONTENT_SERVICE_CONTENT_WEAK',
+  CONTENT_INSUFFICIENT_DEPTH: 'CONTENT_INSUFFICIENT_DEPTH',
+} as const;
+
+export const PAGE_TYPE_DEPTH_BENCHMARKS = {
+  ARTICLE: { minWords: 300, substantialWords: 600, deepWords: 1200, minParagraphs: 3 },
+  DOCUMENTATION: { minWords: 200, substantialWords: 500, deepWords: 1000, minParagraphs: 2 },
+  PRODUCT: { minWords: 80, substantialWords: 200, deepWords: 500, minParagraphs: 1 },
+  SERVICE: { minWords: 120, substantialWords: 300, deepWords: 700, minParagraphs: 2 },
+  LOCAL_BUSINESS: { minWords: 60, substantialWords: 150, deepWords: 400, minParagraphs: 1 },
+  FAQ: { minWords: 80, substantialWords: 250, deepWords: 600, minParagraphs: 2 },
+  CONTACT: { minWords: 25, substantialWords: 60, deepWords: 150, minParagraphs: 1 },
+  CATEGORY_PAGE: { minWords: 60, substantialWords: 180, deepWords: 450, minParagraphs: 1 },
+  HOMEPAGE: { minWords: 120, substantialWords: 350, deepWords: 800, minParagraphs: 2 },
+  LANDING_PAGE: { minWords: 120, substantialWords: 300, deepWords: 700, minParagraphs: 2 },
+  UNKNOWN: { minWords: 120, substantialWords: 300, deepWords: 700, minParagraphs: 2 },
 } as const;
 
 export const SCORING_WEIGHTS = {

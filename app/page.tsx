@@ -30,6 +30,7 @@ import { RobotsSitemapView } from '@/components/technical/RobotsSitemapView';
 import { LinksView } from '@/components/links/LinksView';
 import { ImagesView } from '@/components/images/ImagesView';
 import { SchemaView } from '@/components/schema/SchemaView';
+import { ContentSemanticIntelligenceView } from '@/components/content/ContentSemanticIntelligenceView';
 import { ExportModal } from '@/components/export/ExportModal';
 import { DataSourcesModal } from '@/components/settings/DataSourcesModal';
 
@@ -446,6 +447,7 @@ function AnalyzerContent() {
                     { id: 'onpage', label: 'On-Page & Headings', icon: <FileCode size={15} /> },
                     { id: 'technical', label: `Technical Audits (${inspectedPageReport.issues.length})`, icon: <ShieldAlert size={15} /> },
                     { id: 'robots_sitemap', label: 'Robots & Sitemap', icon: <Bot size={15} /> },
+                    { id: 'content_intelligence', label: 'Semantic & Content Intel', icon: <Sparkles size={15} /> },
                     { id: 'links_images', label: `Links & Images`, icon: <LinkIcon size={15} /> },
                     { id: 'schema', label: `Schema (${inspectedPageReport.schemas.length})`, icon: <Code2 size={15} /> },
                   ].map((tab) => (
@@ -493,6 +495,9 @@ function AnalyzerContent() {
                 )}
                 {reportSubTab === 'content_signals' && inspectedPageReport.contentContribution && (
                   <ContentContributionView contribution={inspectedPageReport.contentContribution} />
+                )}
+                {reportSubTab === 'content_intelligence' && inspectedPageReport.contentIntelligence && (
+                  <ContentSemanticIntelligenceView intelligence={inspectedPageReport.contentIntelligence} />
                 )}
                 {reportSubTab === 'onpage' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
@@ -671,6 +676,7 @@ function AnalyzerContent() {
                     { id: 'onpage', label: 'On-Page & Headings', icon: <FileCode size={15} /> },
                     { id: 'technical', label: `Technical Audits (${report.issues.length})`, icon: <ShieldAlert size={15} /> },
                     { id: 'robots_sitemap', label: 'Robots & Sitemap', icon: <Bot size={15} /> },
+                    { id: 'content_intelligence', label: 'Semantic & Content Intel', icon: <Sparkles size={15} /> },
                     { id: 'links_images', label: `Links & Images`, icon: <LinkIcon size={15} /> },
                     { id: 'schema', label: `Schema (${report.schemas.length})`, icon: <Code2 size={15} /> },
                   ].map((tab) => (
@@ -724,6 +730,11 @@ function AnalyzerContent() {
                 {/* SubTab 4: Content Signal Contribution & Heatmap */}
                 {reportSubTab === 'content_signals' && report.contentContribution && (
                   <ContentContributionView contribution={report.contentContribution} />
+                )}
+
+                {/* SubTab 4.5: Semantic & Content Intelligence */}
+                {reportSubTab === 'content_intelligence' && report.contentIntelligence && (
+                  <ContentSemanticIntelligenceView intelligence={report.contentIntelligence} />
                 )}
 
                 {/* SubTab 5: On-Page & Headings */}

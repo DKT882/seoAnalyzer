@@ -19,6 +19,7 @@ import { auditCanonicalization } from '../technical/canonicalAuditor';
 import { auditHreflang } from '../technical/hreflangAuditor';
 import { auditUrlStructure } from '../technical/urlQualityAuditor';
 import { auditInfrastructure } from '../technical/infrastructureAuditor';
+import { auditContentAndSemantics } from '../content/contentAuditor';
 import {
   SEOReport,
   TechnicalSEO,
@@ -529,6 +530,18 @@ export async function generateSeoReport(
     }
   }
 
+  // 12.5 Audit Content and Semantic Intelligence (Phase 6)
+  const contentIntelligence = auditContentAndSemantics({
+    url: fetchResult.finalUrl,
+    html: workingBody,
+    title: onPage.title,
+    metaDescription: onPage.metaDescription,
+    h1Text: onPage.headings.items.find((h) => h.level === 1)?.text,
+    headings: onPage.headings.items,
+    schemas: workingSchemas,
+    targetKeywords: targetKeywordsList,
+  });
+
   // 13. Calculate final SEO health scores
   const scores = calculateSeoScores({
     onPage,
@@ -603,6 +616,7 @@ export async function generateSeoReport(
     keywords,
     tagExplorer,
     contentContribution,
+    contentIntelligence,
     issues,
     externalSeoDisclaimer: EXTERNAL_SEO_DISCLAIMER,
     dataSourceDisclosures: DATA_SOURCE_DISCLOSURES,

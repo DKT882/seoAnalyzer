@@ -605,6 +605,194 @@ export interface ContentContributionAnalysis {
 }
 
 // ==========================================
+// PHASE 6: CONTENT & SEMANTIC SEO INTELLIGENCE
+// ==========================================
+
+export type PageType =
+  | 'ARTICLE'
+  | 'PRODUCT'
+  | 'SERVICE'
+  | 'LOCAL_BUSINESS'
+  | 'DOCUMENTATION'
+  | 'FAQ'
+  | 'CONTACT'
+  | 'CATEGORY_PAGE'
+  | 'HOMEPAGE'
+  | 'LANDING_PAGE'
+  | 'UNKNOWN';
+
+export type ContentSearchIntent =
+  | 'INFORMATIONAL'
+  | 'COMMERCIAL_INVESTIGATION'
+  | 'TRANSACTIONAL'
+  | 'LOCAL'
+  | 'NAVIGATIONAL'
+  | 'MIXED'
+  | 'UNKNOWN';
+
+export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
+
+export interface ContentBlock {
+  id: string;
+  type: 'heading' | 'paragraph' | 'list' | 'table' | 'quote' | 'faq_qa' | 'product_spec';
+  tag: string;
+  text: string;
+  wordCount: number;
+  headingLevel?: number;
+  isBoilerplate?: boolean;
+  isMainContent: boolean;
+  locationIndex: number;
+}
+
+export interface ContentExtractionResult {
+  mainContentBlocks: ContentBlock[];
+  excludedBlocks: ContentBlock[];
+  mainContentWordCount: number;
+  excludedWordCount: number;
+  mainContentText: string;
+  totalRawWordCount: number;
+  contentToHtmlRatio: number;
+  boilerPlateRatio: number;
+}
+
+export interface PageTypeAssessment {
+  detectedType: PageType;
+  confidence: ConfidenceLevel;
+  detectedSignals: string[];
+  secondaryTypes?: PageType[];
+  explanation: string;
+}
+
+export interface SearchIntentAssessment {
+  primaryIntent: ContentSearchIntent;
+  secondaryIntent?: ContentSearchIntent;
+  confidence: ConfidenceLevel;
+  signals: string[];
+  explanation: string;
+}
+
+export type TopicCoverageStatus =
+  | 'DEEPLY_COVERED'
+  | 'MEANINGFULLY_COVERED'
+  | 'BRIEFLY_COVERED'
+  | 'MENTIONED'
+  | 'NOT_DETECTED';
+
+export interface TopicCoverageItem {
+  topic: string;
+  status: TopicCoverageStatus;
+  occurrences: number;
+  locationsFound: string[];
+  contextSnippet?: string;
+  isMainTopic: boolean;
+}
+
+export interface ContentGapItem {
+  topic: string;
+  missingAspect: string;
+  reason: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  confidence?: ConfidenceLevel;
+  suggestedSection: string;
+  evidence: string;
+}
+
+export type ContentDepthStatus = 'DEEP' | 'SUBSTANTIAL' | 'ADEQUATE' | 'THIN' | 'VERY_THIN';
+
+export interface ContentDepthAssessment {
+  status: ContentDepthStatus;
+  mainWordCount: number;
+  paragraphCount: number;
+  sectionCount: number;
+  averageWordsPerSection: number;
+  isAdequateForPageType: boolean;
+  explanation: string;
+}
+
+export interface HeadingSupportItem {
+  headingText: string;
+  level: number;
+  supportingWordCount: number;
+  hasDirectContent: boolean;
+  subHeadingCount: number;
+  keyConceptsCovered: string[];
+  isSupported: boolean;
+  issue?: string;
+}
+
+export interface HeadingContentRelationship {
+  totalHeadings: number;
+  supportedHeadingsCount: number;
+  unsupportedHeadingsCount: number;
+  headingsWithoutContent: string[];
+  headingTopicDriftCount: number;
+  headings: HeadingSupportItem[];
+  summary: string;
+}
+
+export interface RepetitivePhraseItem {
+  phrase: string;
+  occurrences: number;
+  locations: string[];
+  density: number;
+  issueType: 'EXACT_REPETITION' | 'KEYWORD_STUFFING_SYMPTOM' | 'BOILERPLATE_REPETITION';
+}
+
+export interface ContentRepetitionResult {
+  isRepetitive: boolean;
+  repetitivePhrases: RepetitivePhraseItem[];
+  repetitiveSentencesCount: number;
+  vocabularyDiversityScore: number;
+  summary: string;
+}
+
+export interface PageTypeContentRuleAssessment {
+  pageType: PageType;
+  rulesEvaluated: Array<{
+    ruleName: string;
+    passed: boolean;
+    observation: string;
+    impact: string;
+  }>;
+  passedCount: number;
+  failedCount: number;
+  summary: string;
+}
+
+export interface SemanticContentScore {
+  overall: number; // 0-100
+  topicalDepth: number; // 0-100
+  structuralClarity: number; // 0-100
+  intentSatisfaction: number; // 0-100
+  originalityAndSubstance: number; // 0-100
+  deductions: ScoreDeduction[];
+}
+
+export interface ContentIntelligence {
+  extraction: ContentExtractionResult;
+  pageType: PageTypeAssessment;
+  searchIntent: SearchIntentAssessment;
+  primaryTopics: TopicCoverageItem[];
+  secondaryTopics: TopicCoverageItem[];
+  entities: EntityItem[];
+  topicalCoverageScore: number;
+  contentDepth: ContentDepthAssessment;
+  headingRelationships: HeadingContentRelationship;
+  contentGaps: ContentGapItem[];
+  repetition: ContentRepetitionResult;
+  pageTypeRules: PageTypeContentRuleAssessment;
+  score: SemanticContentScore;
+  recommendations: SEOIssue[];
+  isTargetMode: boolean;
+  targetKeywordAlignment?: {
+    targetKeywords: string[];
+    coverageRatio: number;
+    matchedLocations: Record<string, string[]>;
+    gaps: string[];
+  };
+}
+
+// ==========================================
 // 7-10. COMPETITOR COMPARISON & GAP MODELS
 // ==========================================
 export interface CompetitorPageSummary {
@@ -910,6 +1098,7 @@ export interface SEOReport {
   tagExplorer: TagExplorerData;
   contentContribution: ContentContributionAnalysis;
   issues: SEOIssue[];
+  contentIntelligence?: ContentIntelligence;
   targetKeywords?: string[];
   keywordAnalysisMode?: KeywordAnalysisMode;
   topicCoverageData?: TopicCoverageData;

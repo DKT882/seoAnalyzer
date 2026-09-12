@@ -418,6 +418,7 @@ export function OverviewDashboard({ report, onNavigateTab, onSelectKeyword }: Ov
             { label: 'On-Page SEO', score: onPage, weight: '30% weight', tab: 'onpage', desc: 'Title, Meta, H1, Canonical' },
             { label: 'Technical SEO', score: technical, weight: '25% weight', tab: 'technical', desc: 'HTTP, SSL, Robots, Sitemap' },
             { label: 'Content & Keywords', score: content, weight: '25% weight', tab: 'keywords', desc: 'Word count, Density, TF-IDF' },
+            { label: 'Semantic Intel', score: report.contentIntelligence?.score.overall ?? 85, weight: 'Quality & Intent', tab: 'content_intelligence', desc: `${report.contentIntelligence?.pageType.detectedType || 'Content'} • ${report.contentIntelligence?.searchIntent.primaryIntent || 'Intent'}` },
             { label: 'Links & Images', score: links, weight: '10% weight', tab: 'links_images', desc: 'Internal links, ALT coverage' },
             { label: 'Mobile & UX', score: mobile, weight: '10% weight', tab: 'onpage', desc: 'Viewport, Language, Structure' },
           ].map((cat) => {
