@@ -145,7 +145,8 @@ function createMockCrawlReport(domain: string = 'example.com'): WebsiteCrawlRepo
           evidence: 'Affected: prod-1, prod-2',
           interpretation: 'Confuses search indexing.',
           action: 'Provide unique titles.',
-          expectedBenefit: 'Unique snippet differentiation.'
+          expectedBenefit: 'Unique snippet differentiation.',
+          caution: 'Verify title changes reflect unique page offerings.'
         }
       }
     ],
@@ -164,7 +165,8 @@ function createMockCrawlReport(domain: string = 'example.com'): WebsiteCrawlRepo
           evidence: 'Affected: about, team',
           interpretation: 'Reduces snippet relevance.',
           action: 'Provide distinct meta descriptions.',
-          expectedBenefit: 'Better click-through relevance.'
+          expectedBenefit: 'Better click-through relevance.',
+          caution: 'Verify descriptions accurately summarize each page.'
         }
       }
     ],
@@ -174,7 +176,7 @@ function createMockCrawlReport(domain: string = 'example.com'): WebsiteCrawlRepo
         normalizedUrl: `https://${domain}/isolated-landing`,
         title: 'Isolated Landing Page',
         inlinkCount: 0,
-        discoveryMethod: 'sitemap',
+        discoveryMethod: 'SITEMAP',
         pageType: 'ARTICLE',
         category: 'potential_crawl_orphan',
         evidence: '0 internal links discovered',
@@ -195,7 +197,8 @@ function createMockCrawlReport(domain: string = 'example.com'): WebsiteCrawlRepo
           evidence: 'Points to 301 target',
           interpretation: 'Directs search engines to non-authoritative URL.',
           action: 'Point canonical directly to 200 OK final destination.',
-          expectedBenefit: 'Consolidates ranking signals.'
+          expectedBenefit: 'Consolidates ranking signals.',
+          caution: 'Ensure canonical target returns 200 OK.'
         }
       }
     ],
@@ -212,7 +215,8 @@ function createMockCrawlReport(domain: string = 'example.com'): WebsiteCrawlRepo
         observation: 'Pages target overlapping topic "seo audit tools".',
         interpretation: 'Differentiate intent angles between guide and tool.',
         action: 'Cross-link between guide and tool with clear intent anchors.',
-        expectedBenefit: 'Clarifies intent fulfillment.'
+        expectedBenefit: 'Clarifies intent fulfillment.',
+        caution: 'Review page differentiation before making redirects.'
       }
     ],
     siteKeywords: [],
@@ -246,7 +250,7 @@ function createMockSearchAuditReport(query: string = 'seo analyzer'): SearchInte
         isMixedSerp: false,
         confidence: 'HIGH',
         explanation: 'SERP is dominated by informational guides while this page is transactional.',
-        provenance: { source: 'SERP_ORGANIC', method: 'STATIC_FALLBACK', freshnessAgeMinutes: 0 }
+        provenance: { source: 'EXTERNAL_SERP', provider: 'test', collectedAt: new Date().toISOString(), location: 'US', language: 'en', device: 'DESKTOP', extractionMethod: 'SERP_SNIPPET', isSyntheticTest: false, fingerprint: 'fp1' }
       }
     },
     pageTypeAlignments: {},
@@ -257,7 +261,7 @@ function createMockSearchAuditReport(query: string = 'seo analyzer'): SearchInte
           frequency: 7,
           percentage: 70,
           isCoveredInUserPage: false,
-          provenance: { source: 'SERP_TITLE_SNIPPET', sampleCount: 10, confidence: 'HIGH' },
+          provenance: 'SERP_SNIPPET_DERIVED',
           category: 'POTENTIAL_CONTENT_GAP',
           sampleSnippets: ['Analyze core web vitals and speed performance']
         }
@@ -281,15 +285,16 @@ function createMockSearchAuditReport(query: string = 'seo analyzer'): SearchInte
           evidence: '7/10 SERP results have FAQs',
           interpretation: 'Enables rich snippet expandability in search results.',
           action: 'Add structured FAQ section addressing common search questions.',
-          expectedBenefit: 'Improves SERP visibility and user engagement.'
+          expectedBenefit: 'Improves SERP visibility and user engagement.',
+          caution: 'Verify schema accuracy.'
         },
         confidence: 'HIGH',
         evidenceTimestamp: new Date().toISOString(),
-        provenance: { source: 'SERP_ORGANIC', method: 'STATIC_FALLBACK', freshnessAgeMinutes: 0 }
+        provenance: { source: 'EXTERNAL_SERP', provider: 'test', collectedAt: new Date().toISOString(), location: 'US', language: 'en', device: 'DESKTOP', extractionMethod: 'SERP_SNIPPET', isSyntheticTest: false, fingerprint: 'fp1' }
       }
     ],
     internalLinkIntegrations: [],
-    telemetry: { totalProviderRequests: 1, totalBrowserRenders: 0, cachedResponsesServed: 0, totalCompetitorPagesFetched: 0, totalResponseBytes: 15000, durationMs: 150, errorsEncountered: 0 },
+    telemetry: { totalProviderRequests: 1, providerRequestsUsed: 1, providerRequestBudget: 10, totalBrowserRenders: 0, cachedResponsesServed: 0, totalCompetitorPagesFetched: 0, totalResponseBytes: 15000, durationMs: 150, errorsEncountered: 0 } as any,
     disclaimers: { antiFabricationNotice: 'Measured SERP only', rankingDisclaimer: 'No ranking guarantees', provenanceSummary: 'Direct SERP observation' }
   };
 }
