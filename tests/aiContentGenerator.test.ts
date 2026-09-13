@@ -273,4 +273,97 @@ describe('AI SEO Content Generator Test Suite', () => {
       assert.ok(result.evidenceUsed.length > 0);
     });
   });
+
+  // =========================================================================
+  // 9. MULTI-MODEL ENVELOPE UNWRAPPING & CONTENT EXTRACTION (DOLPHIN3 / LLM)
+  // =========================================================================
+  describe('9. Multi-Model Envelope Unwrapping & Content Extraction', () => {
+    it('9.1 Unwraps nested { seoContent: { content: ... } } envelope seamlessly (Dolphin3 pattern)', async () => {
+      const mockDolphin = new MockAIProvider();
+      mockDolphin.mockStructuredResponses.set('GENERATE_SEO_CONTENT', {
+        seoContent: {
+          title: 'Premium Wireless Gaming Mouse with Precision Sensor',
+          description: 'Experience low latency gaming with our ergonomic wireless mouse.',
+          keywords: ['wireless gaming mouse', 'low latency mouse'],
+          content: 'When choosing the best wireless gaming mouse, sensor accuracy, weight, and battery longevity are paramount. Modern wireless gaming mice feature ultra-fast 2.4GHz polling rates rivaling wired alternatives.',
+        },
+      });
+
+      const req: AIContentGenerationRequest = {
+        contentType: 'product-description',
+        mainTopic: 'Wireless Gaming Mouse',
+        primaryKeyword: 'wireless gaming mouse',
+        wordLimit: 100,
+      };
+
+      const result = await AIContentGenerator.generate(req, mockDolphin);
+      assert.ok(result.content.length > 50);
+      assert.ok(result.actualWordCount > 20);
+      assert.ok(result.content.includes('wireless gaming mouse'));
+      assert.strictEqual(result.metadata.title, 'Premium Wireless Gaming Mouse with Precision Sensor');
+      assert.ok(result.contentQuality.score >= 80);
+    });
+
+    it('9.2 Extracts content from alternate property names (description / article / body / text)', async () => {
+      const mockAltKeys = new MockAIProvider();
+      mockAltKeys.mockStructuredResponses.set('GENERATE_SEO_CONTENT', {
+        title: 'Complete Guide to Technical SEO Auditing',
+        description: 'A comprehensive technical SEO audit inspects site crawlability, indexation status, canonical URL configuration, structured data schemas, and Core Web Vitals performance to ensure peak search engine visibility.',
+        keywords: ['technical seo audit'],
+      });
+
+      const req: AIContentGenerationRequest = {
+        contentType: 'blog-article',
+        mainTopic: 'Technical SEO Audit',
+        primaryKeyword: 'technical seo audit',
+        wordLimit: 80,
+      };
+
+      const result = await AIContentGenerator.generate(req, mockAltKeys);
+      assert.ok(result.content.length > 100);
+      assert.ok(result.actualWordCount > 20);
+      assert.strictEqual(result.metadata.title, 'Complete Guide to Technical SEO Auditing');
+    });
+
+    it('9.3 Concatenates array of section objects into structured markdown body', async () => {
+      const mockSections = new MockAIProvider();
+      mockSections.mockStructuredResponses.set('GENERATE_SEO_CONTENT', {
+        title: 'Core Web Vitals Guide',
+        sections: [
+          { heading: 'Understanding INP', text: 'Interaction to Next Paint measures page responsiveness to user inputs.' },
+          { heading: 'Optimizing LCP', text: 'Largest Contentful Paint measures perceived loading speed of the primary asset.' },
+        ],
+      });
+
+      const req: AIContentGenerationRequest = {
+        contentType: 'blog-article',
+        mainTopic: 'Core Web Vitals Guide',
+        primaryKeyword: 'core web vitals',
+      };
+
+      const result = await AIContentGenerator.generate(req, mockSections);
+      assert.ok(result.content.includes('## Understanding INP'));
+      assert.ok(result.content.includes('## Optimizing LCP'));
+      assert.ok(result.actualWordCount > 15);
+    });
+
+    it('9.4 Fallback gracefully to high-quality deterministic content when LLM returns completely empty object', async () => {
+      const mockEmpty = new MockAIProvider();
+      mockEmpty.mockStructuredResponses.set('GENERATE_SEO_CONTENT', {});
+
+      const req: AIContentGenerationRequest = {
+        contentType: 'product-description',
+        mainTopic: 'Noise Cancelling Headphones',
+        primaryKeyword: 'wireless noise cancelling headphones',
+        wordLimit: 100,
+      };
+
+      const result = await AIContentGenerator.generate(req, mockEmpty);
+      assert.ok(result.content.length > 50);
+      assert.ok(result.actualWordCount > 20);
+      assert.ok(result.content.includes('Noise Cancelling Headphones'));
+      assert.ok(result.metadata.title.length > 0);
+    });
+  });
 });
+

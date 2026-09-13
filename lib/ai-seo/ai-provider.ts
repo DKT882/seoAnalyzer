@@ -1,5 +1,12 @@
 import { AIProviderConfig, AIProviderType } from './types';
 
+export interface StructuredGenerationOptions {
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number;
+  maxRetries?: number;
+}
+
 export interface SEOAIProvider {
   readonly providerType: AIProviderType;
   readonly modelName: string;
@@ -7,13 +14,14 @@ export interface SEOAIProvider {
   generateCompletion(
     systemPrompt: string,
     userPrompt: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: { temperature?: number; maxTokens?: number; timeoutMs?: number; maxRetries?: number }
   ): Promise<string>;
 
   generateStructured<T>(
     systemPrompt: string,
     userPrompt: string,
-    schemaDescription?: string
+    schemaDescription?: string,
+    options?: StructuredGenerationOptions
   ): Promise<T>;
 }
 
@@ -27,7 +35,7 @@ export class RuleInformedProvider implements SEOAIProvider {
   async generateCompletion(
     _systemPrompt: string,
     userPrompt: string,
-    _options?: { temperature?: number; maxTokens?: number }
+    _options?: { temperature?: number; maxTokens?: number; timeoutMs?: number; maxRetries?: number }
   ): Promise<string> {
     return `[Rule-Informed Offline Engine]: Synthesized evidence from structured crawl/SERP analysis.\n${userPrompt.slice(0, 500)}`;
   }
@@ -35,7 +43,8 @@ export class RuleInformedProvider implements SEOAIProvider {
   async generateStructured<T>(
     _systemPrompt: string,
     userPrompt: string,
-    _schemaDescription?: string
+    _schemaDescription?: string,
+    _options?: StructuredGenerationOptions
   ): Promise<T> {
     try {
       const jsonMatch = userPrompt.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
@@ -80,22 +89,24 @@ export class OllamaProvider implements SEOAIProvider {
       config?.modelName ||
       process.env.OLLAMA_MODEL ||
       process.env.AI_SEO_MODEL ||
-      'qwen2.5-coder:7b';
+      'dolphin3';
 
     this.temperature = config?.temperature ?? 0.1;
     this.maxTokens = config?.maxTokens ?? 3000;
     this.timeoutMs = config?.timeoutMs ?? (process.env.OLLAMA_TIMEOUT_MS ? parseInt(process.env.OLLAMA_TIMEOUT_MS, 10) : 60000);
-    this.maxRetries = config?.maxRetries ?? (process.env.OLLAMA_RETRIES ? parseInt(process.env.OLLAMA_RETRIES, 10) : 2);
+    this.maxRetries = config?.maxRetries ?? (process.env.OLLAMA_RETRIES ? parseInt(process.env.OLLAMA_RETRIES, 10) : 0);
   }
 
   async generateCompletion(
     systemPrompt: string,
     userPrompt: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: { temperature?: number; maxTokens?: number; timeoutMs?: number; maxRetries?: number }
   ): Promise<string> {
+    const effectiveRetries = options?.maxRetries ?? this.maxRetries;
+    const effectiveTimeout = options?.timeoutMs ?? this.timeoutMs;
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= effectiveRetries; attempt++) {
       try {
         const isNativeOllama = !this.endpoint.endsWith('/v1');
         const url = isNativeOllama ? `${this.endpoint}/api/chat` : `${this.endpoint}/chat/completions`;
@@ -127,7 +138,7 @@ export class OllamaProvider implements SEOAIProvider {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: AbortSignal.timeout(effectiveTimeout),
         });
 
         if (!response.ok) {
@@ -143,7 +154,7 @@ export class OllamaProvider implements SEOAIProvider {
         }
       } catch (err: any) {
         lastError = err;
-        if (attempt < this.maxRetries) {
+        if (attempt < effectiveRetries) {
           // Wait 250ms * (attempt + 1) before retry
           await new Promise((res) => setTimeout(res, 250 * (attempt + 1)));
         }
@@ -156,14 +167,20 @@ export class OllamaProvider implements SEOAIProvider {
   async generateStructured<T>(
     systemPrompt: string,
     userPrompt: string,
-    schemaDescription?: string
+    schemaDescription?: string,
+    options?: StructuredGenerationOptions
   ): Promise<T> {
     const isNativeOllama = !this.endpoint.endsWith('/v1');
     const formatInstructions = `\n\nCRITICAL INSTRUCTION: You MUST return a strictly valid JSON object or array matching the requested schema. No conversational preamble, no markdown codeblocks, no trailing explanations.\n${schemaDescription ? `Schema Contract:\n${schemaDescription}` : ''}`;
 
+    const effectiveTimeout = options?.timeoutMs ?? (process.env.OLLAMA_CONTENT_TIMEOUT_MS ? parseInt(process.env.OLLAMA_CONTENT_TIMEOUT_MS, 10) : 210000);
+    const effectiveRetries = options?.maxRetries ?? (process.env.OLLAMA_CONTENT_RETRIES !== undefined ? parseInt(process.env.OLLAMA_CONTENT_RETRIES, 10) : 0);
+    const effectiveMaxTokens = options?.maxTokens ?? this.maxTokens;
+    const effectiveTemp = options?.temperature ?? this.temperature;
+
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= effectiveRetries; attempt++) {
       try {
         if (isNativeOllama) {
           const url = `${this.endpoint}/api/chat`;
@@ -176,8 +193,8 @@ export class OllamaProvider implements SEOAIProvider {
             stream: false,
             format: 'json',
             options: {
-              temperature: 0.1,
-              num_predict: this.maxTokens,
+              temperature: effectiveTemp,
+              num_predict: effectiveMaxTokens,
             },
           };
 
@@ -185,7 +202,7 @@ export class OllamaProvider implements SEOAIProvider {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(this.timeoutMs),
+            signal: AbortSignal.timeout(effectiveTimeout),
           });
 
           if (!response.ok) {
@@ -197,12 +214,17 @@ export class OllamaProvider implements SEOAIProvider {
           const content = data.message?.content || '';
           return parseJsonSafely<T>(content);
         } else {
-          const rawOutput = await this.generateCompletion(systemPrompt, userPrompt + formatInstructions, { temperature: 0.1 });
+          const rawOutput = await this.generateCompletion(systemPrompt, userPrompt + formatInstructions, {
+            temperature: effectiveTemp,
+            maxTokens: effectiveMaxTokens,
+            timeoutMs: effectiveTimeout,
+            maxRetries: effectiveRetries,
+          });
           return parseJsonSafely<T>(rawOutput);
         }
       } catch (err: any) {
         lastError = err;
-        if (attempt < this.maxRetries) {
+        if (attempt < effectiveRetries) {
           await new Promise((res) => setTimeout(res, 250 * (attempt + 1)));
         }
       }
@@ -234,7 +256,7 @@ export class OpenAICompatibleProvider implements SEOAIProvider {
   }) {
     this.endpoint = (config.endpointUrl || process.env.OPENAI_BASE_URL || process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/v1').replace(/\/+$/, '');
     this.apiKey = config.apiKey || process.env.OPENAI_API_KEY || process.env.LOCAL_LLM_API_KEY || '';
-    this.modelName = config.modelName || process.env.AI_SEO_MODEL || 'qwen2.5-coder:7b';
+    this.modelName = config.modelName || process.env.AI_SEO_MODEL || 'dolphin3';
     this.temperature = config.temperature ?? 0.2;
     this.maxTokens = config.maxTokens ?? 3000;
     this.timeoutMs = config.timeoutMs ?? 60000;
@@ -243,7 +265,7 @@ export class OpenAICompatibleProvider implements SEOAIProvider {
   async generateCompletion(
     systemPrompt: string,
     userPrompt: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: { temperature?: number; maxTokens?: number; timeoutMs?: number; maxRetries?: number }
   ): Promise<string> {
     const url = `${this.endpoint}/chat/completions`;
     const headers: Record<string, string> = {
@@ -267,7 +289,7 @@ export class OpenAICompatibleProvider implements SEOAIProvider {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: AbortSignal.timeout(options?.timeoutMs ?? this.timeoutMs),
     });
 
     if (!response.ok) {
@@ -282,10 +304,16 @@ export class OpenAICompatibleProvider implements SEOAIProvider {
   async generateStructured<T>(
     systemPrompt: string,
     userPrompt: string,
-    schemaDescription?: string
+    schemaDescription?: string,
+    options?: StructuredGenerationOptions
   ): Promise<T> {
     const formatInstructions = `\n\nCRITICAL: You MUST respond ONLY with a valid JSON object matching the requested schema. No markdown codeblocks, no surrounding text, no conversational preamble.\n${schemaDescription ? `Schema:\n${schemaDescription}` : ''}`;
-    const rawOutput = await this.generateCompletion(systemPrompt, userPrompt + formatInstructions, { temperature: 0.1 });
+    const rawOutput = await this.generateCompletion(systemPrompt, userPrompt + formatInstructions, {
+      temperature: options?.temperature ?? 0.1,
+      maxTokens: options?.maxTokens,
+      timeoutMs: options?.timeoutMs,
+      maxRetries: options?.maxRetries,
+    });
     return parseJsonSafely<T>(rawOutput);
   }
 }
@@ -318,7 +346,7 @@ export class ClaudeAIProvider implements SEOAIProvider {
   async generateCompletion(
     systemPrompt: string,
     userPrompt: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: { temperature?: number; maxTokens?: number; timeoutMs?: number; maxRetries?: number }
   ): Promise<string> {
     if (!this.apiKey) {
       throw new Error('Anthropic API key is not configured (ANTHROPIC_API_KEY missing)');
@@ -343,7 +371,7 @@ export class ClaudeAIProvider implements SEOAIProvider {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: AbortSignal.timeout(options?.timeoutMs ?? this.timeoutMs),
     });
 
     if (!response.ok) {
@@ -359,10 +387,15 @@ export class ClaudeAIProvider implements SEOAIProvider {
   async generateStructured<T>(
     systemPrompt: string,
     userPrompt: string,
-    schemaDescription?: string
+    schemaDescription?: string,
+    options?: StructuredGenerationOptions
   ): Promise<T> {
     const formatInstructions = `\n\nCRITICAL: You MUST respond ONLY with a valid JSON object matching the requested schema. No markdown formatting, no conversational filler.\n${schemaDescription ? `Schema:\n${schemaDescription}` : ''}`;
-    const rawOutput = await this.generateCompletion(systemPrompt, userPrompt + formatInstructions, { temperature: 0.1 });
+    const rawOutput = await this.generateCompletion(systemPrompt, userPrompt + formatInstructions, {
+      temperature: options?.temperature ?? 0.1,
+      maxTokens: options?.maxTokens,
+      timeoutMs: options?.timeoutMs,
+    });
     return parseJsonSafely<T>(rawOutput);
   }
 }
@@ -379,7 +412,11 @@ export class MockAIProvider implements SEOAIProvider {
   public shouldSimulateError: boolean = false;
   public errorMessage: string = 'Simulated local LLM timeout/failure';
 
-  async generateCompletion(systemPrompt: string, userPrompt: string): Promise<string> {
+  async generateCompletion(
+    systemPrompt: string,
+    userPrompt: string,
+    _options?: { temperature?: number; maxTokens?: number; timeoutMs?: number; maxRetries?: number }
+  ): Promise<string> {
     if (this.shouldSimulateError) {
       throw new Error(this.errorMessage);
     }
@@ -392,7 +429,12 @@ export class MockAIProvider implements SEOAIProvider {
     return 'Mock completion response';
   }
 
-  async generateStructured<T>(systemPrompt: string, userPrompt: string): Promise<T> {
+  async generateStructured<T>(
+    systemPrompt: string,
+    userPrompt: string,
+    _schemaDescription?: string,
+    _options?: StructuredGenerationOptions
+  ): Promise<T> {
     if (this.shouldSimulateError) {
       throw new Error(this.errorMessage);
     }
@@ -401,6 +443,9 @@ export class MockAIProvider implements SEOAIProvider {
       if (userPrompt.includes(key) || systemPrompt.includes(key)) {
         return val as T;
       }
+    }
+    if (this.mockStructuredResponses.size === 1) {
+      return this.mockStructuredResponses.values().next().value as T;
     }
     return {} as T;
   }
@@ -443,6 +488,39 @@ export function parseJsonSafely<T>(rawText: string): T {
         } catch {
           // fallback
         }
+      }
+    }
+
+    // Truncated recovery for multi-section arrays: match all complete { "heading": ..., "content": ... } objects
+    const recoveredSections: Array<{ heading: string; content: string }> = [];
+    const sectionRegex = /\{\s*"heading"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,\s*"content"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*\}/g;
+    let match: RegExpExecArray | null;
+    while ((match = sectionRegex.exec(cleaned)) !== null) {
+      try {
+        const heading = JSON.parse(`"${match[1]}"`);
+        const content = JSON.parse(`"${match[2]}"`);
+        recoveredSections.push({ heading, content });
+      } catch {
+        recoveredSections.push({ heading: match[1], content: match[2] });
+      }
+    }
+
+    if (recoveredSections.length > 0) {
+      return { sections: recoveredSections } as T;
+    }
+
+    // Incomplete trailing section recovery (if content was cut off mid-string)
+    const partialRegex = /\{\s*"heading"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,\s*"content"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)$/;
+    const partialMatch = cleaned.match(partialRegex);
+    if (partialMatch && partialMatch[1] && partialMatch[2] && partialMatch[2].length > 40) {
+      try {
+        recoveredSections.push({
+          heading: partialMatch[1],
+          content: partialMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+        });
+        return { sections: recoveredSections } as T;
+      } catch {
+        // ignore
       }
     }
 

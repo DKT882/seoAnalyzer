@@ -16,8 +16,116 @@ export type AIContentType =
   | 'content-brief'
   | 'content-improvement';
 
-export type AISearchIntent = 'informational' | 'commercial' | 'transactional' | 'navigational';
+export type AISearchIntent = 'informational' | 'commercial' | 'transactional' | 'navigational' | 'mixed';
 export type AIContentTone = 'professional' | 'conversational' | 'authoritative' | 'persuasive' | 'educational' | 'technical';
+
+export interface EvidenceAvailability {
+  keywordEvidence: boolean;
+  serpEvidence: boolean;
+  crawlEvidence: boolean;
+  competitorEvidence: boolean;
+}
+
+export interface ContentBlueprintSection {
+  heading: string;
+  purpose: string;
+  targetWords: number;
+  requiredTopics: string[];
+  requiredQuestions: string[];
+  requiredEntities: string[];
+  evidence: string[];
+}
+
+export interface ContentBlueprint {
+  intent: AISearchIntent;
+  userGoal: string;
+  primaryTopic: string;
+  sections: ContentBlueprintSection[];
+  totalTargetWords: number;
+}
+
+export interface ContentIntelligencePlan {
+  primaryTopic: string;
+  primaryKeyword: string;
+  searchIntent: {
+    type: AISearchIntent;
+    confidence: number;
+    explanation: string;
+  };
+  audience: string;
+  userGoal: string;
+  secondaryKeywords: string[];
+  relatedTerms: string[];
+  entities: string[];
+  questions: string[];
+  topicClusters: {
+    topic: string;
+    importance: 'critical' | 'important' | 'supporting';
+    evidence: string[];
+  }[];
+  serpPatterns: {
+    recurringTopics: string[];
+    recurringQuestions: string[];
+    commonFormats: string[];
+    evidenceBacked: boolean;
+  };
+  contentGaps: string[];
+  differentiationOpportunities: string[];
+  requiredSections: ContentBlueprintSection[];
+  internalLinkOpportunities: {
+    url: string;
+    anchorSuggestion: string;
+    reason: string;
+  }[];
+  schemaRecommendation: string[];
+  metadataPlan: {
+    title: string;
+    metaDescription: string;
+    slug: string;
+    h1: string;
+  };
+}
+
+export interface ContentClaim {
+  text: string;
+  type: 'site-fact' | 'provided-fact' | 'derived' | 'general';
+  evidence?: string;
+  confidence: number;
+}
+
+export interface AIContentSection {
+  heading: string;
+  content: string;
+  wordCount: number;
+  coveredTopics: string[];
+  usedKeywords: string[];
+  usedEntities: string[];
+}
+
+export interface AIContentTopicCoverage {
+  overallScore: number; // 0-100 deterministic coverage score
+  intentSatisfaction: number; // 0-100
+  criticalTopicsCovered: number; // 0-100
+  importantTopicsCovered: number; // 0-100
+  questionsCovered: number; // 0-100
+  entitiesCovered: number; // 0-100
+  differentiationScore: number; // 0-100
+  coveredList: string[];
+  missingList: string[];
+}
+
+export interface AIContentQualityScoreDetails {
+  score: number; // 0-100 People-first content quality heuristic
+  seoOpportunity: number; // 0-100 Optimization opportunity assessment
+  intentSatisfaction: number;
+  topicCoverage: number;
+  originalValue: number;
+  evidenceSupport: number;
+  readability: number;
+  keywordNaturalness: number;
+  structure: number;
+  differentiation: number;
+}
 
 export interface AIContentGenerationRequest {
   contentType: AIContentType | string;
@@ -79,12 +187,14 @@ export interface AIContentInternalLinkItem {
 
 export interface AIContentQualityReport {
   score: number; // 0-100 heuristic
+  seoOpportunity?: number; // 0-100 opportunity assessment
   wordCountPass: boolean;
   keywordStuffingDetected: boolean;
   intentAlignment: 'strong' | 'moderate' | 'weak';
   readabilityLevel: 'basic' | 'intermediate' | 'advanced';
   issues: string[];
   strengths: string[];
+  details?: AIContentQualityScoreDetails;
 }
 
 export interface AIContentImprovementReport {
@@ -102,6 +212,12 @@ export interface AIContentGenerationResponse {
   actualWordCount: number;
   deviation: number;
 
+  evidenceAvailability: EvidenceAvailability;
+  blueprint: ContentBlueprint;
+  contentPlan: ContentIntelligencePlan;
+  topicCoverage: AIContentTopicCoverage;
+  claims: ContentClaim[];
+
   seo: {
     primaryKeyword: string;
     primaryKeywordUsed: boolean;
@@ -110,6 +226,9 @@ export interface AIContentGenerationResponse {
     relatedTopics: string[];
     entities: string[];
     searchIntent: string;
+    topicCoverage?: number;
+    intentSatisfaction?: number;
+    keywordNaturalness?: number;
     keywordCoverage: AIContentKeywordCoverage[];
   };
 
@@ -146,11 +265,29 @@ export interface AIContentGenerationResponse {
   contentQuality: AIContentQualityReport;
   contentImprovement?: AIContentImprovementReport;
 
+  generation: {
+    provider: string;
+    model: string;
+    fallbackUsed: boolean;
+    sectionsPlanned?: number;
+    sectionsGenerated: number;
+    failedSections?: string[];
+    calls?: number;
+    generationAttempts?: number;
+    expansionAttempts?: number;
+    expansionPasses: number;
+    requestedWords: number;
+    actualWords: number;
+    durationMs?: number;
+    tokensPerSecond?: number;
+  };
+
   warnings: string[];
   evidenceUsed: string[];
   disclaimers: {
     noRankingGuarantee: string;
     metaKeywordsNotice: string;
     qualityScoreNotice: string;
+    seoOpportunityNotice: string;
   };
 }

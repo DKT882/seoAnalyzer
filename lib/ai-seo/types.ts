@@ -283,7 +283,7 @@ export interface AIProviderConfig {
   providerType: AIProviderType;
   apiKey?: string;
   endpointUrl?: string; // e.g. http://127.0.0.1:11434 for Ollama, http://localhost:8000/v1 for vLLM
-  modelName?: string;   // e.g. 'qwen2.5-coder:7b', 'llama3.2:3b', 'claude-3-7-sonnet', 'gpt-4o-mini'
+  modelName?: string;   // e.g. 'dolphin3', 'qwen2.5-coder:7b', 'llama3.2:3b', 'claude-3-7-sonnet'
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;

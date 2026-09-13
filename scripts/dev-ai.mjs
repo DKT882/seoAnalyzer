@@ -10,7 +10,7 @@
  * 2. If running: reuses existing Ollama instance without duplication.
  * 3. If NOT running: locates Ollama executable on Windows/Mac/Linux and starts it.
  * 4. Polls /api/tags until Ollama is ready (bounded 30s timeout).
- * 5. Queries installed models and verifies 'qwen2.5-coder:7b' exists.
+ * 5. Queries installed models and verifies 'dolphin3' exists.
  * 6. If model missing: stops with clear, actionable `ollama pull` command.
  * 7. Sets AI_PROVIDER=ollama server-side and starts Next.js directly (no recursion).
  * 8. Handles Ctrl+C cleanly without terminating pre-existing Ollama.
@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'dolphin3';
 const OLLAMA_TIMEOUT_MS = process.env.OLLAMA_TIMEOUT_MS || '60000';
 const OLLAMA_RETRIES = process.env.OLLAMA_RETRIES || '2';
 
@@ -74,7 +74,7 @@ function isModelInstalled(targetModel, installedModels) {
     if (i.startsWith(`${t}:`) || t.startsWith(`${i}:`)) return true;
     const tBase = t.split(':')[0];
     const iBase = i.split(':')[0];
-    if (tBase === iBase && t.includes('7b') && i.includes('7b')) return true;
+    if (tBase === iBase) return true;
     return false;
   });
 }

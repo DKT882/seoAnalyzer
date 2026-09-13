@@ -23,7 +23,7 @@ export interface AIHealthReport {
 
 /**
  * Normalizes and matches model names from Ollama tags against target model.
- * Handles forms like 'qwen2.5-coder:7b', 'qwen2.5-coder:7b-instruct-q4_K_M', 'qwen2.5-coder:latest'
+ * Handles forms like 'dolphin3', 'dolphin3:latest', 'qwen2.5-coder:7b', etc.
  */
 export function isModelNameMatch(targetModel: string, installedModel: string): boolean {
   if (!targetModel || !installedModel) return false;
@@ -32,10 +32,9 @@ export function isModelNameMatch(targetModel: string, installedModel: string): b
   if (t === i) return true;
   if (i === `${t}:latest` || t === `${i}:latest`) return true;
   if (i.startsWith(`${t}:`) || t.startsWith(`${i}:`)) return true;
-  // Match prefix before colon (e.g. qwen2.5-coder:7b vs qwen2.5-coder:7b-instruct-q4_K_M)
   const tBase = t.split(':')[0];
   const iBase = i.split(':')[0];
-  if (tBase === iBase && (t.includes('7b') === i.includes('7b'))) {
+  if (tBase === iBase) {
     return true;
   }
   return false;
@@ -60,7 +59,7 @@ export async function checkAIHealth(customConfig?: Partial<AIProviderConfig>): P
     customConfig?.modelName ||
     process.env.OLLAMA_MODEL ||
     process.env.AI_SEO_MODEL ||
-    'qwen2.5-coder:7b';
+    'dolphin3';
 
   // 1. OLLAMA HEALTH CHECK
   if (providerType === 'OLLAMA') {

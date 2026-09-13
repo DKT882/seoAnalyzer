@@ -10,6 +10,8 @@ export * from './validator';
 export * from './auto-applicator';
 export * from './health-check';
 export * from './content-types';
+export * from './content-planner';
+export * from './content-scorer';
 export * from './content-generator';
 export * from './agents/technical-agent';
 export * from './agents/content-agent';

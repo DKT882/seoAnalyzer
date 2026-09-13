@@ -39,10 +39,14 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     logger.error('AI Content Generation API Error:', err);
+    const errorCode = err.code || (err.message?.includes('timed out') ? 'CONTENT_GENERATION_LLM_TIMEOUT' : 'CONTENT_GENERATION_FAILED');
     return NextResponse.json(
       {
         success: false,
-        error: err.message || 'Failed to generate SEO content.',
+        error: {
+          code: errorCode,
+          message: err.message || 'Failed to generate SEO content.',
+        },
       },
       { status: 500 }
     );

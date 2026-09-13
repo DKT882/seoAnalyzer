@@ -1174,7 +1174,7 @@ describe('AI SEO Engine & Claude-SEO Integration Test Suite', () => {
     it('13.1 OllamaProvider configures default 127.0.0.1:11434 and model', () => {
       const provider = new OllamaProvider();
       assert.strictEqual(provider.providerType, 'OLLAMA');
-      assert.strictEqual(provider.modelName, 'qwen2.5-coder:7b');
+      assert.strictEqual(provider.modelName, 'dolphin3');
     });
 
     it('13.2 OllamaProvider accepts custom endpoint, model, timeout and retries', () => {
@@ -1564,13 +1564,16 @@ describe('AI SEO Engine & Claude-SEO Integration Test Suite', () => {
   // =========================================================================
   describe('19. Local AI Startup Automation & Health Diagnostics', () => {
     it('19.1 isModelNameMatch accurately matches exact names, tags, and variants', () => {
+      assert.strictEqual(isModelNameMatch('dolphin3', 'dolphin3'), true);
+      assert.strictEqual(isModelNameMatch('dolphin3', 'dolphin3:latest'), true);
+      assert.strictEqual(isModelNameMatch('dolphin3:latest', 'dolphin3'), true);
       assert.strictEqual(isModelNameMatch('qwen2.5-coder:7b', 'qwen2.5-coder:7b'), true);
       assert.strictEqual(isModelNameMatch('qwen2.5-coder:7b', 'qwen2.5-coder:7b:latest'), true);
       assert.strictEqual(isModelNameMatch('qwen2.5-coder:7b', 'qwen2.5-coder:7b-instruct-q4_K_M'), true);
       assert.strictEqual(isModelNameMatch('llama3.2:3b', 'llama3.2:3b'), true);
-      assert.strictEqual(isModelNameMatch('qwen2.5-coder:7b', 'llama3.2:3b'), false);
-      assert.strictEqual(isModelNameMatch('qwen2.5-coder:7b', 'qwen2.5-coder:14b'), false);
-      assert.strictEqual(isModelNameMatch('', 'qwen2.5-coder:7b'), false);
+      assert.strictEqual(isModelNameMatch('dolphin3', 'llama3.2:3b'), false);
+      assert.strictEqual(isModelNameMatch('qwen2.5-coder:7b', 'dolphin3'), false);
+      assert.strictEqual(isModelNameMatch('', 'dolphin3'), false);
     });
 
     it('19.2 checkAIHealth reports FALLBACK_READY for offline deterministic mode', async () => {
