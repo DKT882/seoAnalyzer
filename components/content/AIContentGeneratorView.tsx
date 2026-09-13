@@ -1,0 +1,1252 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import {
+  Sparkles,
+  Copy,
+  Check,
+  Download,
+  AlertCircle,
+  RefreshCw,
+  Code2,
+  Share2,
+  FileText,
+  Sliders,
+  ShieldCheck,
+  CheckCircle2,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  Tag,
+  Layers,
+  ArrowRight,
+  BookOpen,
+} from 'lucide-react';
+import {
+  AIContentGenerationRequest,
+  AIContentGenerationResponse,
+  AIContentType,
+  AISearchIntent,
+  AIContentTone,
+} from '@/lib/ai-seo/content-types';
+
+interface AIContentGeneratorViewProps {
+  initialTopic?: string;
+  initialKeyword?: string;
+  initialContentType?: AIContentType;
+  initialEvidence?: any;
+  onApplyFix?: (fixContent: string) => void;
+}
+
+const CONTENT_TYPES: Array<{ id: AIContentType; label: string; defaultWords: number }> = [
+  { id: 'product-description', label: 'Product Description', defaultWords: 250 },
+  { id: 'category-description', label: 'Category Description', defaultWords: 300 },
+  { id: 'blog-article', label: 'Full Blog Article', defaultWords: 800 },
+  { id: 'blog-intro', label: 'Blog Introduction', defaultWords: 150 },
+  { id: 'blog-conclusion', label: 'Blog Conclusion', defaultWords: 150 },
+  { id: 'section', label: 'Article / Landing Section', defaultWords: 350 },
+  { id: 'faq', label: 'FAQ Section (Q&A)', defaultWords: 300 },
+  { id: 'paragraph', label: 'SEO Paragraph', defaultWords: 100 },
+  { id: 'meta-title', label: 'SEO Title Package', defaultWords: 50 },
+  { id: 'meta-description', label: 'Meta Description Package', defaultWords: 60 },
+  { id: 'headings', label: 'SEO Heading Hierarchy', defaultWords: 100 },
+  { id: 'image-alt', label: 'Image Alt Text Suggestions', defaultWords: 80 },
+  { id: 'content-brief', label: 'SEO Content Brief', defaultWords: 400 },
+  { id: 'content-improvement', label: 'Content Rewrite / Improvement', defaultWords: 350 },
+];
+
+const WORD_PRESETS = [50, 100, 250, 300, 500, 800, 1200, 1500];
+
+export function AIContentGeneratorView({
+  initialTopic = '',
+  initialKeyword = '',
+  initialContentType = 'product-description',
+  initialEvidence,
+}: AIContentGeneratorViewProps) {
+  // Input form state
+  const [contentType, setContentType] = useState<AIContentType>(initialContentType);
+  const [mainTopic, setMainTopic] = useState<string>(initialTopic || initialEvidence?.topic || '');
+  const [primaryKeyword, setPrimaryKeyword] = useState<string>(initialKeyword || initialEvidence?.primaryKeyword || '');
+  const [secondaryKeywords, setSecondaryKeywords] = useState<string>('');
+  const [wordLimit, setWordLimit] = useState<number>(250);
+  const [searchIntent, setSearchIntent] = useState<AISearchIntent>('informational');
+  const [tone, setTone] = useState<AIContentTone>('professional');
+  const [targetAudience, setTargetAudience] = useState<string>('');
+  const [language, setLanguage] = useState<string>('English');
+  const [country, setCountry] = useState<string>('US');
+
+  // Advanced / Improvement state
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [existingContent, setExistingContent] = useState<string>('');
+  const [improvementGoal, setImprovementGoal] = useState<'improve_seo' | 'rewrite' | 'expand' | 'shorten' | 'readability'>('improve_seo');
+  const [brandDescription, setBrandDescription] = useState<string>('');
+  const [keyBenefits, setKeyBenefits] = useState<string>('');
+  const [cta, setCta] = useState<string>('');
+  const [forbiddenClaims, setForbiddenClaims] = useState<string>('');
+
+  // Generation state
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [result, setResult] = useState<AIContentGenerationResponse | null>(null);
+
+  // Active view tab in results
+  const [activeResultTab, setActiveResultTab] = useState<'content' | 'seo' | 'metadata' | 'schema' | 'social' | 'quality' | 'improvement'>('content');
+
+  // Copy feedback state
+  const [copiedContent, setCopiedContent] = useState<boolean>(false);
+  const [copiedPackage, setCopiedPackage] = useState<boolean>(false);
+  const [copiedSchema, setCopiedSchema] = useState<boolean>(false);
+
+  // Synchronize when initial props change
+  useEffect(() => {
+    if (initialTopic) setMainTopic(initialTopic);
+    if (initialKeyword) setPrimaryKeyword(initialKeyword);
+    if (initialContentType) setContentType(initialContentType);
+    if (initialEvidence?.url) {
+      if (!mainTopic && initialEvidence.technical?.title?.value) {
+        setMainTopic(initialEvidence.technical.title.value);
+      }
+      if (!primaryKeyword && initialEvidence.keywords?.targetKeyword) {
+        setPrimaryKeyword(initialEvidence.keywords.targetKeyword);
+      }
+    }
+  }, [initialTopic, initialKeyword, initialContentType, initialEvidence]);
+
+  // Handle content type preset changes
+  const handleContentTypeChange = (type: AIContentType) => {
+    setContentType(type);
+    const preset = CONTENT_TYPES.find((t) => t.id === type);
+    if (preset) {
+      setWordLimit(preset.defaultWords);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!mainTopic.trim()) {
+      setGenerationError('Please enter a main topic or subject.');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerationError(null);
+
+    const payload: AIContentGenerationRequest = {
+      contentType,
+      mainTopic: mainTopic.trim(),
+      primaryKeyword: primaryKeyword.trim() || mainTopic.trim(),
+      wordLimit,
+      secondaryKeywords: secondaryKeywords ? secondaryKeywords.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      searchIntent,
+      tone,
+      targetAudience: targetAudience.trim() || undefined,
+      language,
+      country,
+      existingContent: existingContent.trim() || undefined,
+      improvementGoal: existingContent ? improvementGoal : undefined,
+      brandDescription: brandDescription.trim() || undefined,
+      keyBenefits: keyBenefits ? keyBenefits.split('\n').map((s) => s.trim()).filter(Boolean) : undefined,
+      cta: cta.trim() || undefined,
+      forbiddenClaims: forbiddenClaims ? forbiddenClaims.split('\n').map((s) => s.trim()).filter(Boolean) : undefined,
+      evidence: initialEvidence,
+    };
+
+    try {
+      const res = await fetch('/api/ai-seo/content/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Generation failed with status ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (data.success && data.result) {
+        setResult(data.result);
+        if (data.result.contentImprovement) {
+          setActiveResultTab('improvement');
+        } else {
+          setActiveResultTab('content');
+        }
+      } else {
+        throw new Error(data.error || 'Failed to generate content response.');
+      }
+    } catch (err: any) {
+      setGenerationError(err.message || 'An unexpected error occurred during generation.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopy = (text: string, type: 'content' | 'package' | 'schema') => {
+    navigator.clipboard.writeText(text);
+    if (type === 'content') {
+      setCopiedContent(true);
+      setTimeout(() => setCopiedContent(false), 2000);
+    } else if (type === 'package') {
+      setCopiedPackage(true);
+      setTimeout(() => setCopiedPackage(false), 2000);
+    } else if (type === 'schema') {
+      setCopiedSchema(true);
+      setTimeout(() => setCopiedSchema(false), 2000);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      {/* Header Banner */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.08) 100%)',
+          border: '1px solid rgba(99, 102, 241, 0.25)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '1.75rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '1rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, var(--primary), #a855f7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
+            }}
+          >
+            <Sparkles size={26} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, color: '#fff' }}>
+              AI SEO Content Generator
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0' }}>
+              Generate comprehensive, human-grade, evidence-backed SEO content, metadata, schema, and topical packages.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span
+            style={{
+              padding: '0.35rem 0.75rem',
+              borderRadius: '20px',
+              background: 'rgba(34, 197, 94, 0.15)',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              color: '#4ade80',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+          >
+            <ShieldCheck size={14} />
+            <span>Local AI Ready (Ollama + Qwen)</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Main Grid: Inputs Left, Results Right */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: result ? '420px 1fr' : '1fr',
+          gap: '2rem',
+          alignItems: 'start',
+        }}
+      >
+        {/* ========================================================================= */}
+        {/* INPUT FORM PANEL */}
+        {/* ========================================================================= */}
+        <div
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1.5rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Sliders size={18} color="var(--primary)" />
+              <span>Generation Parameters</span>
+            </h3>
+            {initialEvidence?.url && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--primary)', background: 'rgba(99, 102, 241, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                Audited Page Linked
+              </span>
+            )}
+          </div>
+
+          {/* Content Type */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+              Content Type
+            </label>
+            <select
+              value={contentType}
+              onChange={(e) => handleContentTypeChange(e.target.value as AIContentType)}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(0, 0, 0, 0.25)',
+                border: '1px solid var(--border-subtle)',
+                color: '#fff',
+                fontSize: '0.9rem',
+                outline: 'none',
+              }}
+            >
+              {CONTENT_TYPES.map((t) => (
+                <option key={t.id} value={t.id} style={{ background: '#1e1e24', color: '#fff' }}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Main Topic */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+              Main Topic / Subject *
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Pro Runner Running Shoes or SaaS Onboarding Guide"
+              value={mainTopic}
+              onChange={(e) => setMainTopic(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(0, 0, 0, 0.25)',
+                border: '1px solid var(--border-subtle)',
+                color: '#fff',
+                fontSize: '0.9rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Primary Keyword */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+              Primary Target Keyword *
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. best running shoes for beginners"
+              value={primaryKeyword}
+              onChange={(e) => setPrimaryKeyword(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(0, 0, 0, 0.25)',
+                border: '1px solid var(--border-subtle)',
+                color: '#fff',
+                fontSize: '0.9rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Secondary Keywords */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+              Secondary Keywords (Comma-separated)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. cushioned footwear, lightweight trainers, arch support"
+              value={secondaryKeywords}
+              onChange={(e) => setSecondaryKeywords(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(0, 0, 0, 0.25)',
+                border: '1px solid var(--border-subtle)',
+                color: '#fff',
+                fontSize: '0.9rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Word Limit Selector & Presets */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Target Word Count: <span style={{ color: 'var(--primary)' }}>{wordLimit} words</span>
+              </label>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+              {WORD_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setWordLimit(preset)}
+                  style={{
+                    padding: '0.3rem 0.55rem',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    background: wordLimit === preset ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
+                    color: wordLimit === preset ? '#fff' : 'var(--text-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {preset}w
+                </button>
+              ))}
+            </div>
+            <input
+              type="range"
+              min={30}
+              max={2000}
+              step={10}
+              value={wordLimit}
+              onChange={(e) => setWordLimit(Number(e.target.value))}
+              style={{ width: '100%', accentColor: 'var(--primary)' }}
+            />
+          </div>
+
+          {/* Search Intent & Tone Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                Search Intent
+              </label>
+              <select
+                value={searchIntent}
+                onChange={(e) => setSearchIntent(e.target.value as AISearchIntent)}
+                style={{
+                  width: '100%',
+                  padding: '0.55rem 0.65rem',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid var(--border-subtle)',
+                  color: '#fff',
+                  fontSize: '0.85rem',
+                  outline: 'none',
+                }}
+              >
+                <option value="informational">Informational</option>
+                <option value="commercial">Commercial</option>
+                <option value="transactional">Transactional</option>
+                <option value="navigational">Navigational</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                Tone of Voice
+              </label>
+              <select
+                value={tone}
+                onChange={(e) => setTone(e.target.value as AIContentTone)}
+                style={{
+                  width: '100%',
+                  padding: '0.55rem 0.65rem',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid var(--border-subtle)',
+                  color: '#fff',
+                  fontSize: '0.85rem',
+                  outline: 'none',
+                }}
+              >
+                <option value="professional">Professional</option>
+                <option value="conversational">Conversational</option>
+                <option value="authoritative">Authoritative</option>
+                <option value="persuasive">Persuasive</option>
+                <option value="educational">Educational</option>
+                <option value="technical">Technical</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Advanced / Content Improvement Accordion Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              padding: '0.5rem 0',
+              borderTop: '1px solid var(--border-subtle)',
+              marginTop: '0.5rem',
+            }}
+          >
+            <span>{showAdvanced ? 'Hide Advanced Options & Rewrite Mode' : 'Show Advanced Options & Rewrite Mode'}</span>
+            {showAdvanced ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          {showAdvanced && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingTop: '0.5rem' }}>
+              {/* Existing Content for Rewrite */}
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                  Existing Content (For Improvement / Rewrite Mode)
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="Paste existing copy here to analyze gaps, expand, or improve search intent alignment..."
+                  value={existingContent}
+                  onChange={(e) => setExistingContent(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(0, 0, 0, 0.25)',
+                    border: '1px solid var(--border-subtle)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              {existingContent && (
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                    Improvement Goal
+                  </label>
+                  <select
+                    value={improvementGoal}
+                    onChange={(e) => setImprovementGoal(e.target.value as any)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(0, 0, 0, 0.25)',
+                      border: '1px solid var(--border-subtle)',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <option value="improve_seo">Improve Overall SEO & Keyword Depth</option>
+                    <option value="rewrite">Complete Rewrite with Modern Tone</option>
+                    <option value="expand">Expand with Missing Subtopics</option>
+                    <option value="shorten">Condense & Tighten Readability</option>
+                    <option value="readability">Simplify Language & Flow</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Target Audience & CTA */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                    Target Audience
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Marathon runners"
+                    value={targetAudience}
+                    onChange={(e) => setTargetAudience(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(0, 0, 0, 0.25)',
+                      border: '1px solid var(--border-subtle)',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                    Call to Action (CTA)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Shop Now, Start Free Trial"
+                    value={cta}
+                    onChange={(e) => setCta(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(0, 0, 0, 0.25)',
+                      border: '1px solid var(--border-subtle)',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Forbidden Claims */}
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                  Forbidden Claims / Negative Constraints
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Do not claim medical benefits, do not mention competitors"
+                  value={forbiddenClaims}
+                  onChange={(e) => setForbiddenClaims(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(0, 0, 0, 0.25)',
+                    border: '1px solid var(--border-subtle)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {generationError && (
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.75rem',
+                color: '#f87171',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}
+            >
+              <AlertCircle size={16} />
+              <span>{generationError}</span>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.6rem',
+              padding: '0.85rem',
+              borderRadius: 'var(--radius-sm)',
+              background: 'linear-gradient(135deg, var(--primary), #a855f7)',
+              color: '#fff',
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              border: 'none',
+              cursor: isGenerating ? 'not-allowed' : 'pointer',
+              opacity: isGenerating ? 0.7 : 1,
+              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {isGenerating ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" />
+                <span>Synthesizing SEO Content...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={18} />
+                <span>Generate SEO Content Package</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* RESULTS PANEL */}
+        {/* ========================================================================= */}
+        {result ? (
+          <div
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+            }}
+          >
+            {/* Tab Navigation for Results */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                borderBottom: '1px solid var(--border-subtle)',
+                paddingBottom: '0.75rem',
+                overflowX: 'auto',
+              }}
+            >
+              {[
+                { id: 'content', label: 'Generated Content', icon: <FileText size={15} /> },
+                { id: 'seo', label: 'SEO & Keywords', icon: <Tag size={15} /> },
+                { id: 'metadata', label: 'Metadata & Headings', icon: <BookOpen size={15} /> },
+                { id: 'schema', label: 'Structured Data', icon: <Code2 size={15} /> },
+                { id: 'social', label: 'Social Sharing', icon: <Share2 size={15} /> },
+                { id: 'quality', label: `Quality Score (${result.contentQuality.score}/100)`, icon: <ShieldCheck size={15} /> },
+                ...(result.contentImprovement ? [{ id: 'improvement', label: 'Rewrite Diff', icon: <Layers size={15} /> }] : []),
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveResultTab(tab.id as any)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.55rem 0.85rem',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    background: activeResultTab === tab.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.04)',
+                    color: activeResultTab === tab.id ? '#fff' : 'var(--text-secondary)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* TAB 1: GENERATED CONTENT */}
+            {activeResultTab === 'content' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* Word Count & Stats Bar */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'rgba(0, 0, 0, 0.25)',
+                    padding: '0.75rem 1rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.85rem' }}>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>Actual Length: </span>
+                      <strong style={{ color: '#fff' }}>{result.actualWordCount} words</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>Target: </span>
+                      <span>{result.requestedWordCount} words</span>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>Deviation: </span>
+                      <span style={{ color: Math.abs(result.deviation) <= 40 ? '#4ade80' : '#fbbf24' }}>
+                        {result.deviation > 0 ? `+${result.deviation}` : result.deviation} words
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(result.content, 'content')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: 'var(--radius-sm)',
+                        background: copiedContent ? 'rgba(34, 197, 94, 0.2)' : 'rgba(99, 102, 241, 0.15)',
+                        border: '1px solid var(--primary)',
+                        color: '#fff',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {copiedContent ? <Check size={14} color="#4ade80" /> : <Copy size={14} />}
+                      <span>{copiedContent ? 'Copied!' : 'Copy Content'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const blob = new Blob([result.content], { type: 'text/markdown' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${result.metadata.slug || 'seo-content'}.md`;
+                        a.click();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Download size={14} />
+                      <span>Download .md</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Editable Content Area */}
+                <textarea
+                  rows={14}
+                  value={result.content}
+                  onChange={(e) => {
+                    const newText = e.target.value;
+                    const count = newText.trim().split(/\s+/).filter(Boolean).length;
+                    setResult({
+                      ...result,
+                      content: newText,
+                      actualWordCount: count,
+                      deviation: count - result.requestedWordCount,
+                    });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '1rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    border: '1px solid var(--border-subtle)',
+                    color: '#fff',
+                    fontSize: '0.95rem',
+                    lineHeight: '1.6',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* TAB 2: SEO & KEYWORDS */}
+            {activeResultTab === 'seo' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '1rem',
+                  }}
+                >
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Primary Keyword</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginTop: '0.25rem' }}>{result.seo.primaryKeyword}</div>
+                    <div style={{ fontSize: '0.8rem', color: result.seo.primaryKeywordUsed ? '#4ade80' : '#f87171', marginTop: '0.25rem' }}>
+                      {result.seo.primaryKeywordUsed ? `✓ Used (${result.seo.primaryKeywordCount}x)` : '✗ Not detected in body'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Search Intent</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.25rem', textTransform: 'capitalize' }}>
+                      {result.seo.searchIntent}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                      Aligned with SERP query type
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Keyword Stuffing Guard</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: result.contentQuality.keywordStuffingDetected ? '#f87171' : '#4ade80', marginTop: '0.25rem' }}>
+                      {result.contentQuality.keywordStuffingDetected ? 'Warning: High Density' : 'Natural Frequency Passed'}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                      Google spam penalty compliant
+                    </div>
+                  </div>
+                </div>
+
+                {/* Keyword Coverage Breakdown */}
+                <div>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>
+                    Keyword & Topical Coverage Analysis
+                  </h4>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left', color: 'var(--text-secondary)' }}>
+                          <th style={{ padding: '0.5rem' }}>Keyword</th>
+                          <th style={{ padding: '0.5rem' }}>Status</th>
+                          <th style={{ padding: '0.5rem' }}>Occurrences</th>
+                          <th style={{ padding: '0.5rem' }}>Naturalness</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {result.seo.keywordCoverage.map((kw, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <td style={{ padding: '0.5rem', fontWeight: 600, color: '#fff' }}>{kw.keyword}</td>
+                            <td style={{ padding: '0.5rem' }}>
+                              <span
+                                style={{
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  background: kw.status === 'used' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  color: kw.status === 'used' ? '#4ade80' : '#f87171',
+                                }}
+                              >
+                                {kw.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>{kw.occurrences}x</td>
+                            <td style={{ padding: '0.5rem', color: kw.naturalness === 'forced' ? '#f87171' : '#4ade80', textTransform: 'capitalize' }}>
+                              {kw.naturalness}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Topical Entities */}
+                {result.seo.entities.length > 0 && (
+                  <div>
+                    <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', marginBottom: '0.5rem' }}>
+                      Topical Entities & Semantic Concepts
+                    </h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {result.seo.entities.map((entity, i) => (
+                        <span
+                          key={i}
+                          style={{
+                            padding: '0.3rem 0.6rem',
+                            borderRadius: '20px',
+                            background: 'rgba(99, 102, 241, 0.1)',
+                            border: '1px solid rgba(99, 102, 241, 0.25)',
+                            color: 'var(--primary)',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          {entity}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: METADATA & HEADINGS */}
+            {activeResultTab === 'metadata' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {/* Meta Keywords Educational Notice */}
+                <div
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.1)',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '0.75rem 1rem',
+                    color: '#93c5fd',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.6rem',
+                  }}
+                >
+                  <HelpCircle size={18} />
+                  <span>
+                    <strong>Google SEO Standard:</strong> Google Search does NOT use the <code>&lt;meta name=&quot;keywords&quot;&gt;</code> tag for ranking. The metadata below focuses on CTR-optimized Title, Description, and Heading structure.
+                  </span>
+                </div>
+
+                {/* Recommended Title */}
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Recommended SEO Title</div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff' }}>{result.metadata.title}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>{result.metadata.titleRationale}</div>
+                  {result.metadata.alternativeTitles.length > 0 && (
+                    <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Alternative Titles:</div>
+                      {result.metadata.alternativeTitles.map((alt, i) => (
+                        <div key={i} style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>• {alt}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Recommended Meta Description */}
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Recommended Meta Description</div>
+                  <div style={{ fontSize: '0.95rem', color: '#fff', lineHeight: '1.5' }}>{result.metadata.metaDescription}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>{result.metadata.metaDescriptionRationale}</div>
+                </div>
+
+                {/* URL Slug & H1 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Suggested Clean Slug</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--primary)', marginTop: '0.25rem' }}>/{result.metadata.slug}</div>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Recommended H1</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', marginTop: '0.25rem' }}>{result.metadata.h1}</div>
+                  </div>
+                </div>
+
+                {/* Heading Hierarchy Outline */}
+                {result.metadata.headings.length > 0 && (
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', marginBottom: '0.5rem' }}>Suggested Heading Outline</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {result.metadata.headings.map((h, i) => (
+                        <div key={i} style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ padding: '0.1rem 0.4rem', borderRadius: '3px', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.75rem' }}>
+                            {h.level.toUpperCase()}
+                          </span>
+                          <span style={{ color: '#fff' }}>{h.text}</span>
+                          {h.purpose && <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>({h.purpose})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: STRUCTURED DATA */}
+            {activeResultTab === 'schema' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: '#fff' }}>
+                      Recommended Schema.org Structured Data
+                    </h4>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0' }}>
+                      Types: {result.structuredData.recommendedTypes.join(', ')}
+                    </p>
+                  </div>
+
+                  {result.structuredData.schemaSnippet && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(result.structuredData.schemaSnippet!, 'schema')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: 'var(--radius-sm)',
+                        background: copiedSchema ? 'rgba(34, 197, 94, 0.2)' : 'rgba(99, 102, 241, 0.15)',
+                        border: '1px solid var(--primary)',
+                        color: '#fff',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {copiedSchema ? <Check size={14} color="#4ade80" /> : <Copy size={14} />}
+                      <span>{copiedSchema ? 'Copied JSON-LD!' : 'Copy Schema JSON-LD'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {result.structuredData.missingRequiredData.length > 0 && (
+                  <div
+                    style={{
+                      background: 'rgba(234, 179, 8, 0.1)',
+                      border: '1px solid rgba(234, 179, 8, 0.3)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem 1rem',
+                      color: '#fde047',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <strong>Notice:</strong> To be eligible for Google Rich Results, ensure you provide: {result.structuredData.missingRequiredData.join(', ')}.
+                  </div>
+                )}
+
+                {result.structuredData.schemaSnippet && (
+                  <pre
+                    style={{
+                      background: 'rgba(0, 0, 0, 0.4)',
+                      padding: '1rem',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-subtle)',
+                      color: '#a5f3fc',
+                      fontSize: '0.85rem',
+                      overflowX: 'auto',
+                      fontFamily: 'monospace',
+                    }}
+                  >
+                    <code>{result.structuredData.schemaSnippet}</code>
+                  </pre>
+                )}
+              </div>
+            )}
+
+            {/* TAB 5: SOCIAL SHARING */}
+            {activeResultTab === 'social' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                {/* OpenGraph Preview */}
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Share2 size={16} color="var(--primary)" />
+                    <span>Open Graph Metadata (Facebook, LinkedIn)</span>
+                  </h4>
+                  <div style={{ fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div><strong style={{ color: 'var(--text-secondary)' }}>og:title:</strong> <span style={{ color: '#fff' }}>{result.social.ogTitle}</span></div>
+                    <div><strong style={{ color: 'var(--text-secondary)' }}>og:description:</strong> <span style={{ color: '#fff' }}>{result.social.ogDescription}</span></div>
+                    <div><strong style={{ color: 'var(--text-secondary)' }}>og:type:</strong> <span style={{ color: 'var(--primary)' }}>{result.social.ogType}</span></div>
+                  </div>
+                </div>
+
+                {/* Twitter Preview */}
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Share2 size={16} color="#38bdf8" />
+                    <span>Twitter / X Card Metadata</span>
+                  </h4>
+                  <div style={{ fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div><strong style={{ color: 'var(--text-secondary)' }}>twitter:card:</strong> <span style={{ color: '#38bdf8' }}>{result.social.twitterCard}</span></div>
+                    <div><strong style={{ color: 'var(--text-secondary)' }}>twitter:title:</strong> <span style={{ color: '#fff' }}>{result.social.twitterTitle}</span></div>
+                    <div><strong style={{ color: 'var(--text-secondary)' }}>twitter:description:</strong> <span style={{ color: '#fff' }}>{result.social.twitterDescription}</span></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 6: QUALITY & HEURISTICS */}
+            {activeResultTab === 'quality' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div
+                  style={{
+                    background: 'rgba(0,0,0,0.25)',
+                    padding: '1.25rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Internal Content Quality Heuristic</div>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: result.contentQuality.score >= 80 ? '#4ade80' : '#fbbf24' }}>
+                      {result.contentQuality.score} / 100
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    <div>Readability Level: <strong style={{ color: '#fff', textTransform: 'capitalize' }}>{result.contentQuality.readabilityLevel}</strong></div>
+                    <div>Intent Alignment: <strong style={{ color: '#4ade80', textTransform: 'capitalize' }}>{result.contentQuality.intentAlignment}</strong></div>
+                  </div>
+                </div>
+
+                {/* Strengths */}
+                {result.contentQuality.strengths.length > 0 && (
+                  <div>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#4ade80', marginBottom: '0.5rem' }}>
+                      Key Content Strengths:
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {result.contentQuality.strengths.map((str, i) => (
+                        <div key={i} style={{ fontSize: '0.85rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <CheckCircle2 size={15} color="#4ade80" />
+                          <span>{str}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Issues */}
+                {result.contentQuality.issues.length > 0 && (
+                  <div>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f87171', marginBottom: '0.5rem' }}>
+                      Recommendations for Improvement:
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {result.contentQuality.issues.map((iss, i) => (
+                        <div key={i} style={{ fontSize: '0.85rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <AlertCircle size={15} color="#f87171" />
+                          <span>{iss}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Disclaimer */}
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                  {result.disclaimers.qualityScoreNotice} {result.disclaimers.noRankingGuarantee}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 7: CONTENT IMPROVEMENT DIFF */}
+            {activeResultTab === 'improvement' && result.contentImprovement && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f87171', marginBottom: '0.4rem' }}>Original Text</div>
+                    <div style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+                      {result.contentImprovement.originalContent}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4ade80', marginBottom: '0.4rem' }}>Improved SEO Content</div>
+                    <div style={{ background: 'rgba(34, 197, 94, 0.05)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', color: '#fff', whiteSpace: 'pre-wrap' }}>
+                      {result.contentImprovement.improvedContent}
+                    </div>
+                  </div>
+                </div>
+
+                {result.contentImprovement.changesMade.length > 0 && (
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', marginBottom: '0.4rem' }}>Changes Implemented:</div>
+                    {result.contentImprovement.changesMade.map((ch, i) => (
+                      <div key={i} style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>• {ch}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}

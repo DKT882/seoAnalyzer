@@ -9,6 +9,8 @@ export * from './fix-generator';
 export * from './validator';
 export * from './auto-applicator';
 export * from './health-check';
+export * from './content-types';
+export * from './content-generator';
 export * from './agents/technical-agent';
 export * from './agents/content-agent';
 export * from './agents/ecommerce-agent';

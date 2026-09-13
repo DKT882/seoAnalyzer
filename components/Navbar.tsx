@@ -3,9 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Globe, Users, BarChart3, History, BookOpen, Download, RefreshCw, ShieldCheck, Database } from 'lucide-react';
+import { Globe, Users, BarChart3, History, BookOpen, Download, RefreshCw, ShieldCheck, Database, Sparkles } from 'lucide-react';
 
-export type NavTab = 'analyzer' | 'competitors' | 'domain' | 'history' | 'methodology';
+export type NavTab = 'analyzer' | 'ai-content' | 'competitors' | 'domain' | 'history' | 'methodology';
 
 interface NavbarProps {
   activeTab?: NavTab;
@@ -139,6 +139,28 @@ export function Navbar({
           >
             <Globe size={15} />
             Analyzer
+          </Link>
+
+          <Link
+            href="/#ai-content"
+            onClick={() => handleNavClick('ai-content')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.5rem 0.85rem',
+              borderRadius: 'var(--radius-md)',
+              background: isTabActive('ai-content') ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.2))' : 'transparent',
+              color: isTabActive('ai-content') ? '#fff' : 'var(--text-secondary)',
+              border: isTabActive('ai-content') ? '1px solid var(--primary)' : '1px solid transparent',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              textDecoration: 'none',
+            }}
+          >
+            <Sparkles size={15} color={isTabActive('ai-content') ? '#a855f7' : 'var(--primary)'} />
+            AI Content Generator
           </Link>
 
           <Link

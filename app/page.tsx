@@ -31,6 +31,7 @@ import { LinksView } from '@/components/links/LinksView';
 import { ImagesView } from '@/components/images/ImagesView';
 import { SchemaView } from '@/components/schema/SchemaView';
 import { ContentSemanticIntelligenceView } from '@/components/content/ContentSemanticIntelligenceView';
+import { AIContentGeneratorView } from '@/components/content/AIContentGeneratorView';
 import { ExportModal } from '@/components/export/ExportModal';
 import { DataSourcesModal } from '@/components/settings/DataSourcesModal';
 
@@ -363,6 +364,11 @@ function AnalyzerContent() {
         {/* View 2: Domain Overview */}
         {navTab === 'domain' && <DomainOverviewView />}
 
+        {/* View 2.5: AI SEO Content Generator */}
+        {navTab === 'ai-content' && (
+          <AIContentGeneratorView initialEvidence={inspectedPageReport || report || undefined} />
+        )}
+
         {/* View 3: Analyzer Mode */}
         {navTab === 'analyzer' && (
           <>
@@ -441,6 +447,7 @@ function AnalyzerContent() {
                 >
                   {[
                     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={15} /> },
+                    { id: 'ai_content', label: 'AI Content Generator', icon: <Sparkles size={15} /> },
                     { id: 'keywords', label: `Keyword Intel (${inspectedPageReport.keywords.all.length})`, icon: <Key size={15} /> },
                     { id: 'tags', label: `Tag Explorer (${inspectedPageReport.tagExplorer?.totalElementsCount || 'All'})`, icon: <Code size={15} /> },
                     { id: 'content_signals', label: `Content Signals & Heatmap`, icon: <Flame size={15} /> },
@@ -481,6 +488,13 @@ function AnalyzerContent() {
                     report={inspectedPageReport}
                     onNavigateTab={setReportSubTab}
                     onSelectKeyword={handleSelectKeyword}
+                  />
+                )}
+                {reportSubTab === 'ai_content' && (
+                  <AIContentGeneratorView
+                    initialTopic={inspectedPageReport.onPage.title || inspectedPageReport.url}
+                    initialKeyword={inspectedPageReport.keywords.primary?.[0]?.keyword || ''}
+                    initialEvidence={inspectedPageReport}
                   />
                 )}
                 {reportSubTab === 'keywords' && (
@@ -670,6 +684,7 @@ function AnalyzerContent() {
                 >
                   {[
                     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={15} /> },
+                    { id: 'ai_content', label: 'AI Content Generator', icon: <Sparkles size={15} /> },
                     { id: 'keywords', label: `Keyword Intel (${report.keywords.all.length})`, icon: <Key size={15} /> },
                     { id: 'tags', label: `Tag Explorer (${report.tagExplorer?.totalElementsCount || 'All'})`, icon: <Code size={15} /> },
                     { id: 'content_signals', label: `Content Signals & Heatmap`, icon: <Flame size={15} /> },
@@ -710,6 +725,13 @@ function AnalyzerContent() {
                     report={report}
                     onNavigateTab={setReportSubTab}
                     onSelectKeyword={handleSelectKeyword}
+                  />
+                )}
+                {reportSubTab === 'ai_content' && (
+                  <AIContentGeneratorView
+                    initialTopic={report.onPage.title || report.url}
+                    initialKeyword={report.keywords.primary?.[0]?.keyword || ''}
+                    initialEvidence={report}
                   />
                 )}
 
