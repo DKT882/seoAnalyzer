@@ -30,7 +30,21 @@ export async function POST(req: NextRequest) {
       wordLimit: boundedWordLimit,
     };
 
-    const result = await AIContentGenerator.generate(sanitizedRequest);
+    const requestStartTime = Date.now();
+    const maxGenMs = process.env.AI_CONTENT_MAX_GENERATION_MS
+      ? parseInt(process.env.AI_CONTENT_MAX_GENERATION_MS, 10)
+      : 180000;
+    const deadline = requestStartTime + maxGenMs;
+
+    const result = await AIContentGenerator.generate(
+      sanitizedRequest,
+      undefined,
+      {
+        deadline,
+        maxGenerationMs: maxGenMs,
+        signal: req.signal,
+      }
+    );
 
     return NextResponse.json({
       success: true,

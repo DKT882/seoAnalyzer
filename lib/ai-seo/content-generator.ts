@@ -20,14 +20,19 @@ export class AIContentGenerator {
    */
   public static async generate(
     request: AIContentGenerationRequest,
-    customProvider?: SEOAIProvider
+    customProvider?: SEOAIProvider,
+    options?: {
+      deadline?: number;
+      maxGenerationMs?: number;
+      signal?: AbortSignal;
+    }
   ): Promise<AIContentGenerationResponse> {
     const provider = customProvider || getAIProvider();
 
     // 1. Normalize request inputs
     const normalizedRequest = this.normalizeRequest(request);
 
-    // 2. Stage A: Construct Content Intelligence Plan & Blueprint
+    // 2. Stage A: Construct Content Intelligence Plan & Blueprint (100% deterministic, 0 LLM calls)
     const plan = ContentIntelligencePlanner.constructPlan(normalizedRequest, normalizedRequest.evidence);
     const blueprint = ContentIntelligencePlanner.constructBlueprint(normalizedRequest, normalizedRequest.evidence);
     const evidenceAvailability = ContentIntelligencePlanner.checkEvidenceAvailability(
@@ -43,6 +48,11 @@ export class AIContentGenerator {
     let calls = 0;
     let durationMs = 0;
     const startTime = Date.now();
+
+    const configuredMaxGenMs =
+      options?.maxGenerationMs ||
+      (process.env.AI_CONTENT_MAX_GENERATION_MS ? parseInt(process.env.AI_CONTENT_MAX_GENERATION_MS, 10) : 180000);
+    const deadline = options?.deadline || startTime + configuredMaxGenMs;
 
     try {
       if (provider.providerType === 'RULE_INFORMED_OFFLINE') {
@@ -70,12 +80,17 @@ export class AIContentGenerator {
           calls = 1;
           durationMs = Date.now() - startTime;
         } else {
-          // Bounded multi-section batch generation (1-3 batches max)
+          // Bounded multi-section batch generation with strict global deadline propagation
           const genResult = await this.generateBoundedBatches(
             normalizedRequest,
             blueprint,
             plan,
-            provider
+            provider,
+            {
+              deadline,
+              maxGenMs: configuredMaxGenMs,
+              signal: options?.signal,
+            }
           );
           rawResult = genResult.rawResult;
           sectionsGenerated = genResult.sectionsGenerated;
@@ -154,7 +169,12 @@ export class AIContentGenerator {
     req: AIContentGenerationRequest,
     blueprint: ContentBlueprint,
     plan: ContentIntelligencePlan,
-    provider: SEOAIProvider
+    provider: SEOAIProvider,
+    context: {
+      deadline: number;
+      maxGenMs: number;
+      signal?: AbortSignal;
+    }
   ): Promise<{
     rawResult: Partial<AIContentGenerationResponse>;
     sectionsGenerated: number;
@@ -166,129 +186,101 @@ export class AIContentGenerator {
   }> {
     const startTime = Date.now();
     const totalTargetWords = blueprint.totalTargetWords;
-    const maxGenMs = process.env.AI_CONTENT_MAX_GENERATION_MS
-      ? parseInt(process.env.AI_CONTENT_MAX_GENERATION_MS, 10)
-      : (totalTargetWords >= 1000 ? 720000 : 540000);
-
     const generatedSections: AIContentSection[] = [];
     const failedSections: string[] = [];
     let fallbackUsed = false;
     let calls = 0;
     let expansionPasses = 0;
 
-    // Partition blueprint sections into bounded batches (1-3 batches)
     const sections = blueprint.sections;
-    const totalSections = sections.length;
-    let batches: ContentBlueprintSection[][] = [];
+    const MAX_TOTAL_LLM_CALLS = process.env.AI_CONTENT_MAX_LLM_CALLS
+      ? parseInt(process.env.AI_CONTENT_MAX_LLM_CALLS, 10)
+      : 2;
 
-    if (totalSections <= 3 || totalTargetWords <= 400) {
-      batches = [sections];
-    } else if (totalSections <= 6) {
-      const mid = Math.ceil(totalSections / 2);
-      batches = [sections.slice(0, mid), sections.slice(mid)];
-    } else {
-      const batchSize = Math.ceil(totalSections / 3);
-      batches = [
-        sections.slice(0, batchSize),
-        sections.slice(batchSize, batchSize * 2),
-        sections.slice(batchSize * 2),
-      ].filter((b) => b.length > 0);
-    }
-
-    let previousRollingSummary = '';
-
-    for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
-      const currentBatch = batches[batchIdx];
-      const elapsed = Date.now() - startTime;
-
-      // Check global generation deadline
-      if (elapsed >= maxGenMs) {
-        logger.warn(
-          `[CONTENT] Global generation deadline reached (${elapsed}ms >= ${maxGenMs}ms). Completing remaining sections via deterministic fallback.`
-        );
-        for (const sec of currentBatch) {
-          failedSections.push(sec.heading);
-          const fallbackText = this.generateDeterministicSection(sec, req.mainTopic, req.primaryKeyword);
-          generatedSections.push({
-            heading: sec.heading,
-            content: fallbackText,
-            wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
-            coveredTopics: sec.requiredTopics,
-            usedKeywords: [req.primaryKeyword],
-            usedEntities: sec.requiredEntities,
-          });
-        }
-        fallbackUsed = true;
-        continue;
+    // Check if remaining global deadline time is sufficient
+    const remainingMs = context.deadline - Date.now();
+    if (remainingMs <= 15000) {
+      logger.warn(
+        `[CONTENT] Global generation deadline nearly exhausted (${remainingMs}ms remaining). Completing all sections via deterministic fallback.`
+      );
+      for (const sec of sections) {
+        failedSections.push(sec.heading);
+        const fallbackText = this.generateDeterministicSection(sec, req.mainTopic, req.primaryKeyword);
+        generatedSections.push({
+          heading: sec.heading,
+          content: fallbackText,
+          wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
+          coveredTopics: sec.requiredTopics,
+          usedKeywords: [req.primaryKeyword],
+          usedEntities: sec.requiredEntities,
+        });
       }
+      fallbackUsed = true;
+    } else {
+      // Primary Unified Structured Generation Call (Bounded to ~200-220 output tokens so it completes in ~150s at 1.54 tok/s)
+      const primaryMaxTokens = Math.min(Math.round(totalTargetWords * 0.30) + 40, 220);
+      const effectiveTimeoutMs = Math.min(180000, Math.max(remainingMs - 5000, 10000));
 
-      const batchTargetWords = currentBatch.reduce((sum, s) => sum + s.targetWords, 0);
-      // Measured Dolphin3 speed ~1.53 tok/s. Bounded output tokens per batch.
-      const batchMaxTokens = Math.min(Math.round(batchTargetWords * 0.75) + 50, 360);
-      const batchTimeoutMs = process.env.OLLAMA_CONTENT_TIMEOUT_MS
-        ? parseInt(process.env.OLLAMA_CONTENT_TIMEOUT_MS, 10)
-        : Math.round((batchMaxTokens / 1.5) * 1000 + 45000);
-
-      const sectionPromptsText = currentBatch
+      const sectionPromptsText = sections
         .map(
           (s, idx) =>
             `Section ${idx + 1}:
 - Heading: "${s.heading}"
 - Purpose: ${s.purpose}
-- Target Words: approx ${s.targetWords} words (concise, informative markdown paragraphs, no fluff)
-- Topics: ${s.requiredTopics.join(', ')}
-- Entities: ${s.requiredEntities.join(', ')}
-${s.requiredQuestions.length > 0 ? `- Questions: ${s.requiredQuestions.join('; ')}` : ''}`
+- Focus: ${s.requiredTopics.join(', ')}
+${s.requiredQuestions.length > 0 ? `- Answers Question: ${s.requiredQuestions[0]}` : ''}`
         )
         .join('\n\n');
 
-      const batchPrompt = `You are an elite SEO Copywriter writing part ${batchIdx + 1} of ${batches.length} for a comprehensive guide on "${blueprint.primaryTopic}".
+      const unifiedPrompt = `You are an elite SEO Copywriter creating content for a comprehensive guide on "${blueprint.primaryTopic}".
 Search Intent: "${blueprint.intent}"
 Primary Keyword: "${req.primaryKeyword}"
 ${req.secondaryKeywords && Array.isArray(req.secondaryKeywords) && req.secondaryKeywords.length > 0 ? `Secondary Keywords: ${req.secondaryKeywords.join(', ')}` : ''}
-${previousRollingSummary ? `Previous Context Summary: "${previousRollingSummary}"` : ''}
 
-Generate detailed markdown content for each of the following ${currentBatch.length} sections:
+Generate high-value, informative markdown paragraphs for each of the following sections:
 
 ${sectionPromptsText}
 
-Respond ONLY with valid JSON matching schema:
+Respond ONLY with a valid JSON object matching this schema:
 {
   "sections": [
     {
       "heading": "Exact section heading string",
-      "content": "Full markdown paragraphs with subheadings (###) and bullet points where useful..."
+      "content": "Full markdown content with detailed explanations, technical context, and bullet points where useful..."
     }
   ]
 }`;
 
       calls++;
       try {
-        const batchOutput = await provider.generateStructured<any>(
+        const primaryOutput = await provider.generateStructured<any>(
           'You are a high-grade SEO writer. Return ONLY valid JSON with sections array. No codeblocks.',
-          batchPrompt,
+          unifiedPrompt,
           '{ "sections": [{ "heading": "string", "content": "markdown string" }] }',
           {
-            maxTokens: batchMaxTokens,
-            timeoutMs: batchTimeoutMs,
+            maxTokens: primaryMaxTokens,
+            timeoutMs: effectiveTimeoutMs,
             maxRetries: 0,
+            signal: context.signal,
+            stage: 'generation',
           }
         );
 
         let returnedSections: Array<{ heading?: string; content?: string }> = [];
-        if (batchOutput && Array.isArray(batchOutput.sections)) {
-          returnedSections = batchOutput.sections;
-        } else if (batchOutput && Array.isArray(batchOutput)) {
-          returnedSections = batchOutput;
-        } else if (batchOutput && (batchOutput.content || batchOutput.body)) {
-          returnedSections = [{ heading: currentBatch[0]?.heading, content: batchOutput.content || batchOutput.body }];
+        if (primaryOutput && Array.isArray(primaryOutput.sections)) {
+          returnedSections = primaryOutput.sections;
+        } else if (primaryOutput && Array.isArray(primaryOutput)) {
+          returnedSections = primaryOutput;
+        } else if (primaryOutput && (primaryOutput.content || primaryOutput.body)) {
+          returnedSections = [{ heading: sections[0]?.heading, content: primaryOutput.content || primaryOutput.body }];
         }
 
-        for (let i = 0; i < currentBatch.length; i++) {
-          const sec = currentBatch[i];
-          const matchedReturn = returnedSections.find(
-            (r) => r.heading && r.heading.toLowerCase().includes(sec.heading.toLowerCase().slice(0, 15))
-          ) || returnedSections[i];
+        for (let i = 0; i < sections.length; i++) {
+          const sec = sections[i];
+          const matchedReturn =
+            returnedSections.find(
+              (r) => r.heading && r.heading.toLowerCase().includes(sec.heading.toLowerCase().slice(0, 15))
+            ) || returnedSections[i];
 
           let secContent = '';
           if (matchedReturn && typeof matchedReturn.content === 'string' && matchedReturn.content.trim().length > 30) {
@@ -311,15 +303,11 @@ Respond ONLY with valid JSON matching schema:
             usedKeywords: [req.primaryKeyword],
             usedEntities: sec.requiredEntities,
           });
-
-          if (secContent.length > 30) {
-            previousRollingSummary = secContent.slice(0, 120).replace(/\n+/g, ' ');
-          }
         }
       } catch (err: any) {
-        logger.warn(`[CONTENT] LLM batch ${batchIdx + 1} generation timed out or failed: ${err.message}. Utilizing deterministic fallback for batch.`);
+        logger.warn(`[CONTENT] Primary LLM generation timed out or failed: ${err.message}. Utilizing deterministic fallback for all sections.`);
         fallbackUsed = true;
-        for (const sec of currentBatch) {
+        for (const sec of sections) {
           failedSections.push(sec.heading);
           const fallbackText = this.generateDeterministicSection(sec, req.mainTopic, req.primaryKeyword);
           generatedSections.push({
@@ -341,20 +329,21 @@ Respond ONLY with valid JSON matching schema:
 
     const currentWords = fullMarkdown.split(/\s+/).filter(Boolean).length;
 
-    // Stage C: Controlled Expansion Loop only if materially below requested scope (< 65% target) AND plan has gaps AND time permits
-    const elapsedBeforeExpansion = Date.now() - startTime;
+    // Stage C: Controlled Expansion Loop ONLY if materially below requested scope (< 65% target) AND plan has gaps AND time permits (>= 60s remaining)
+    const remainingTimeForExpansion = context.deadline - Date.now();
     if (
       currentWords < totalTargetWords * 0.65 &&
       plan.contentGaps.length > 0 &&
       expansionPasses === 0 &&
-      (maxGenMs - elapsedBeforeExpansion) > 120000
+      calls < MAX_TOTAL_LLM_CALLS &&
+      remainingTimeForExpansion >= 60000
     ) {
       calls++;
       try {
-        const gapPrompt = `The article for "${req.mainTopic}" needs additional practical depth on these specific content gaps:
+        const gapPrompt = `The article for "${req.mainTopic}" needs practical depth on these specific content gaps:
 ${plan.contentGaps.join('\n')}
 
-Write an in-depth FAQ & Practical Implementation subsection covering these missing topics in approximately ${Math.round(totalTargetWords * 0.2)} words.
+Write a concise FAQ & Key Insights section addressing these points in approximately 100 words.
 Respond ONLY with JSON: { "heading": "Practical Nuances & FAQ", "content": "..." }`;
 
         const expansionOutput = await provider.generateStructured<any>(
@@ -362,14 +351,16 @@ Respond ONLY with JSON: { "heading": "Practical Nuances & FAQ", "content": "..."
           gapPrompt,
           '{ "heading": "string", "content": "string" }',
           {
-            maxTokens: Math.min(Math.round(totalTargetWords * 0.25), 200),
-            timeoutMs: 90000,
+            maxTokens: 100,
+            timeoutMs: Math.min(60000, remainingTimeForExpansion - 5000),
             maxRetries: 0,
+            signal: context.signal,
+            stage: 'expansion',
           }
         );
 
         const expContent = expansionOutput?.content || expansionOutput?.body || expansionOutput?.text;
-        if (expContent && typeof expContent === 'string' && expContent.length > 80) {
+        if (expContent && typeof expContent === 'string' && expContent.length > 60) {
           fullMarkdown += `\n\n## Practical Insights & Key Questions\n\n${expContent.trim()}`;
           expansionPasses++;
         }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   Copy,
@@ -27,6 +27,7 @@ import {
   Target,
   Info,
   ListChecks,
+  XCircle,
 } from 'lucide-react';
 import {
   AIContentGenerationRequest,
@@ -90,12 +91,13 @@ export function AIContentGeneratorView({
   const [cta, setCta] = useState<string>('');
   const [forbiddenClaims, setForbiddenClaims] = useState<string>('');
 
-  // Generation state
+  // Generation state & Abort Controller
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generationStage, setGenerationStage] = useState<string>('Analyzing search intent...');
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [result, setResult] = useState<AIContentGenerationResponse | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Active view tab in results
   const [activeResultTab, setActiveResultTab] = useState<'strategy' | 'content' | 'seo' | 'metadata' | 'schema' | 'social' | 'quality' | 'improvement'>('strategy');
@@ -116,17 +118,15 @@ export function AIContentGeneratorView({
       setElapsedSeconds((prev) => {
         const next = prev + 1;
         if (next < 5) {
-          setGenerationStage('Constructing content intelligence plan & search intent...');
-        } else if (next < 15) {
-          setGenerationStage('Allocating section word budgets & blueprint structure...');
-        } else if (next < 35) {
-          setGenerationStage('Generating batch 1 of 2 via Dolphin3 on RTX 4050...');
-        } else if (next < 75) {
-          setGenerationStage('Generating batch 2 of 2 via Dolphin3 on RTX 4050...');
-        } else if (next < 110) {
-          setGenerationStage('Assembling sections & checking topic coverage...');
+          setGenerationStage('Constructing content intelligence plan & blueprint...');
+        } else if (next < 30) {
+          setGenerationStage('Generating structured content via Dolphin3 on RTX 4050...');
+        } else if (next < 90) {
+          setGenerationStage('Generating sections via Dolphin3 local GPU...');
+        } else if (next < 140) {
+          setGenerationStage('Validating readability, topic coverage, and schema...');
         } else {
-          setGenerationStage(`Processing locally on RTX 4050 (${Math.floor(next / 60)}m ${next % 60}s elapsed)...`);
+          setGenerationStage(`Finalizing content on RTX 4050 (${Math.floor(next / 60)}m ${next % 60}s elapsed)...`);
         }
         return next;
       });
@@ -159,15 +159,31 @@ export function AIContentGeneratorView({
     }
   };
 
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+    setGenerationStage('Generation cancelled');
+    setGenerationError('Content generation was cancelled by user.');
+  };
+
   const handleGenerate = async () => {
+    // Guard against duplicate submissions
+    if (isGenerating) return;
+
     if (!mainTopic.trim()) {
       setGenerationError('Please enter a main topic or subject.');
       return;
     }
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsGenerating(true);
     setElapsedSeconds(0);
-    setGenerationStage('Constructing content intelligence plan & search intent...');
+    setGenerationStage('Constructing content intelligence plan & blueprint...');
     setGenerationError(null);
 
     const payload: AIContentGenerationRequest = {
@@ -195,6 +211,7 @@ export function AIContentGeneratorView({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
       const data = await res.json().catch(() => ({}));
@@ -224,9 +241,14 @@ export function AIContentGeneratorView({
         throw new Error('Failed to parse generation result.');
       }
     } catch (err: any) {
-      setGenerationError(err.message || 'An unexpected error occurred during generation.');
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        setGenerationError('Content generation was cancelled.');
+      } else {
+        setGenerationError(err.message || 'An unexpected error occurred during generation.');
+      }
     } finally {
       setIsGenerating(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -697,41 +719,69 @@ export function AIContentGeneratorView({
             </div>
           )}
 
-          {/* Submit Button */}
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.6rem',
-              padding: '0.85rem',
-              borderRadius: 'var(--radius-sm)',
-              background: 'linear-gradient(135deg, var(--primary), #a855f7)',
-              color: '#fff',
-              fontSize: '0.95rem',
-              fontWeight: 700,
-              border: 'none',
-              cursor: isGenerating ? 'not-allowed' : 'pointer',
-              opacity: isGenerating ? 0.8 : 1,
-              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            {isGenerating ? (
-              <>
-                <RefreshCw size={18} className="animate-spin" />
-                <span>{generationStage}</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={18} />
-                <span>Generate SEO Content Package</span>
-              </>
+          {/* Submit and Cancel Button Row */}
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'stretch' }}>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.6rem',
+                padding: '0.85rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'linear-gradient(135deg, var(--primary), #a855f7)',
+                color: '#fff',
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                border: 'none',
+                cursor: isGenerating ? 'not-allowed' : 'pointer',
+                opacity: isGenerating ? 0.8 : 1,
+                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCw size={18} className="animate-spin" />
+                  <span>{generationStage}</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} />
+                  <span>Generate SEO Content Package</span>
+                </>
+              )}
+            </button>
+
+            {isGenerating && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                title="Cancel ongoing generation request"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.85rem 1.25rem',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  color: '#f87171',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <XCircle size={16} />
+                <span>Cancel</span>
+              </button>
             )}
-          </button>
+          </div>
 
           {/* Active Generation GPU Info Box */}
           {isGenerating && (
@@ -755,7 +805,7 @@ export function AIContentGeneratorView({
                 </span>
               </div>
               <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                Generating content on NVIDIA GeForce RTX 4050 GPU (~1.5 tok/s). Execution is strictly bounded.
+                Generating content on NVIDIA GeForce RTX 4050 GPU. Recent benchmark: ~1.54 tok/s | Bounded deadline: 3m.
               </p>
             </div>
           )}

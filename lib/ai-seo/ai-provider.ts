@@ -5,6 +5,10 @@ export interface StructuredGenerationOptions {
   maxTokens?: number;
   timeoutMs?: number;
   maxRetries?: number;
+  signal?: AbortSignal;
+  callId?: string;
+  stage?: 'planning' | 'generation' | 'expansion' | 'other';
+  section?: string;
 }
 
 export interface SEOAIProvider {
@@ -173,15 +177,38 @@ export class OllamaProvider implements SEOAIProvider {
     const isNativeOllama = !this.endpoint.endsWith('/v1');
     const formatInstructions = `\n\nCRITICAL INSTRUCTION: You MUST return a strictly valid JSON object or array matching the requested schema. No conversational preamble, no markdown codeblocks, no trailing explanations.\n${schemaDescription ? `Schema Contract:\n${schemaDescription}` : ''}`;
 
-    const effectiveTimeout = options?.timeoutMs ?? (process.env.OLLAMA_CONTENT_TIMEOUT_MS ? parseInt(process.env.OLLAMA_CONTENT_TIMEOUT_MS, 10) : 210000);
+    const callId = options?.callId || `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const stage = options?.stage || 'generation';
+    const effectiveTimeout = options?.timeoutMs ?? (process.env.OLLAMA_CONTENT_TIMEOUT_MS ? parseInt(process.env.OLLAMA_CONTENT_TIMEOUT_MS, 10) : 180000);
     const effectiveRetries = options?.maxRetries ?? (process.env.OLLAMA_CONTENT_RETRIES !== undefined ? parseInt(process.env.OLLAMA_CONTENT_RETRIES, 10) : 0);
     const effectiveMaxTokens = options?.maxTokens ?? this.maxTokens;
     const effectiveTemp = options?.temperature ?? this.temperature;
 
+    console.log(`[AI-CONTENT] CALL_START callId=${callId} stage=${stage} section=${options?.section || 'all'} startedAt=${new Date().toISOString()} timeoutMs=${effectiveTimeout} maxTokens=${effectiveMaxTokens}`);
+
+    const callStartTime = Date.now();
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= effectiveRetries; attempt++) {
       try {
+        // Construct combined abort signal (timeout + optional caller signal)
+        let fetchSignal: AbortSignal;
+        if (options?.signal) {
+          if (typeof (AbortSignal as any).any === 'function') {
+            fetchSignal = (AbortSignal as any).any([options.signal, AbortSignal.timeout(effectiveTimeout)]);
+          } else {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(new Error('Operation timed out')), effectiveTimeout);
+            options.signal.addEventListener('abort', () => {
+              clearTimeout(timer);
+              controller.abort();
+            });
+            fetchSignal = controller.signal;
+          }
+        } else {
+          fetchSignal = AbortSignal.timeout(effectiveTimeout);
+        }
+
         if (isNativeOllama) {
           const url = `${this.endpoint}/api/chat`;
           const payload = {
@@ -202,7 +229,7 @@ export class OllamaProvider implements SEOAIProvider {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(effectiveTimeout),
+            signal: fetchSignal,
           });
 
           if (!response.ok) {
@@ -212,7 +239,10 @@ export class OllamaProvider implements SEOAIProvider {
 
           const data = await response.json();
           const content = data.message?.content || '';
-          return parseJsonSafely<T>(content);
+          const parsed = parseJsonSafely<T>(content);
+
+          console.log(`[AI-CONTENT] CALL_END callId=${callId} stage=${stage} durationMs=${Date.now() - callStartTime} status=success`);
+          return parsed;
         } else {
           const rawOutput = await this.generateCompletion(systemPrompt, userPrompt + formatInstructions, {
             temperature: effectiveTemp,
@@ -220,10 +250,19 @@ export class OllamaProvider implements SEOAIProvider {
             timeoutMs: effectiveTimeout,
             maxRetries: effectiveRetries,
           });
-          return parseJsonSafely<T>(rawOutput);
+          const parsed = parseJsonSafely<T>(rawOutput);
+          console.log(`[AI-CONTENT] CALL_END callId=${callId} stage=${stage} durationMs=${Date.now() - callStartTime} status=success`);
+          return parsed;
         }
       } catch (err: any) {
         lastError = err;
+        const durationMs = Date.now() - callStartTime;
+        if (err.name === 'AbortError' || err.message?.includes('aborted') || err.message?.includes('timeout')) {
+          console.warn(`[AI-CONTENT] CALL_ABORT callId=${callId} stage=${stage} durationMs=${durationMs} reason=deadline_or_timeout`);
+        } else {
+          console.error(`[AI-CONTENT] CALL_ERROR callId=${callId} stage=${stage} durationMs=${durationMs} error=${err.message}`);
+        }
+
         if (attempt < effectiveRetries) {
           await new Promise((res) => setTimeout(res, 250 * (attempt + 1)));
         }
