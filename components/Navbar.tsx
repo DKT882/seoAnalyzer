@@ -40,17 +40,7 @@ export function Navbar({
   };
 
   return (
-    <header
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        background: 'var(--bg-glass)',
-        backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid var(--border-subtle)',
-        padding: '0.85rem 2rem',
-      }}
-    >
+    <header className="app-header">
       <div
         style={{
           maxWidth: '1440px',
@@ -58,6 +48,8 @@ export function Navbar({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: '1rem',
+          flexWrap: 'wrap',
         }}
       >
         {/* Brand / Logo */}
@@ -73,6 +65,7 @@ export function Navbar({
             gap: '0.75rem',
             cursor: 'pointer',
             textDecoration: 'none',
+            flexShrink: 0,
           }}
         >
           <div
@@ -118,7 +111,7 @@ export function Navbar({
         </Link>
 
         {/* Navigation Links */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <nav className="app-nav custom-scrollbar">
           <Link
             href="/"
             onClick={() => handleNavClick('analyzer')}

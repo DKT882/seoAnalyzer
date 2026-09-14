@@ -16,6 +16,37 @@ export type AIContentType =
   | 'content-brief'
   | 'content-improvement';
 
+export type ContentProfile =
+  | 'general'
+  | 'ecommerce'
+  | 'saas'
+  | 'local-business'
+  | 'publisher'
+  | 'adult';
+
+export type AdultContentProfile =
+  | 'adult-entertainment'
+  | 'adult-products'
+  | 'sexual-wellness'
+  | 'adult-creator'
+  | 'adult-community'
+  | 'adult-video'
+  | 'escort-services'
+  | 'adult-stories';
+
+export interface AdultSEOContext {
+  isAdultSite: true;
+  profile: AdultContentProfile;
+  ageRestricted: boolean;
+  contentClassification: 'adult' | 'sexual-wellness' | 'adult-product' | 'non-explicit' | 'adult-video' | 'adult-service' | 'adult-literature';
+  audience: string;
+  safeSearchConsiderations: string[];
+  trustRequirements: string[];
+  restrictedClaims: string[];
+  schemaRecommendations: string[];
+  schemaRestrictions: string[];
+}
+
 export type AISearchIntent = 'informational' | 'commercial' | 'transactional' | 'navigational' | 'mixed';
 export type AIContentTone = 'professional' | 'conversational' | 'authoritative' | 'persuasive' | 'educational' | 'technical';
 
@@ -42,11 +73,16 @@ export interface ContentBlueprint {
   primaryTopic: string;
   sections: ContentBlueprintSection[];
   totalTargetWords: number;
+  contentProfile?: ContentProfile;
+  adultContext?: AdultSEOContext;
 }
 
 export interface ContentIntelligencePlan {
   primaryTopic: string;
   primaryKeyword: string;
+  contentProfile?: ContentProfile;
+  adultContext?: AdultSEOContext;
+  safeSearchConsiderations?: string[];
   searchIntent: {
     type: AISearchIntent;
     confidence: number;
@@ -125,12 +161,17 @@ export interface AIContentQualityScoreDetails {
   keywordNaturalness: number;
   structure: number;
   differentiation: number;
+  trust?: number;
+  safetyAccuracy?: number;
 }
 
 export interface AIContentGenerationRequest {
   contentType: AIContentType | string;
   mainTopic: string;
   primaryKeyword: string;
+  contentProfile?: ContentProfile;
+  adultProfile?: AdultContentProfile;
+  isAdultSite?: boolean;
   wordLimit?: number;
   secondaryKeywords?: string[] | string;
   relatedTopics?: string[] | string;
@@ -208,12 +249,17 @@ export interface AIContentImprovementReport {
 export interface AIContentGenerationResponse {
   content: string;
   contentType: string;
+  contentProfile?: ContentProfile;
+  adultContext?: AdultSEOContext;
+  isAdultSite?: boolean;
+  safeSearchConsiderations?: string[];
   requestedWordCount: number;
   actualWordCount: number;
   deviation: number;
 
   evidenceAvailability: EvidenceAvailability;
   blueprint: ContentBlueprint;
+  contentBlueprint: ContentBlueprint;
   contentPlan: ContentIntelligencePlan;
   topicCoverage: AIContentTopicCoverage;
   claims: ContentClaim[];

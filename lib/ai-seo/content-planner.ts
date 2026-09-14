@@ -1,9 +1,12 @@
 import {
+  AdultContentProfile,
+  AdultSEOContext,
   AIContentGenerationRequest,
   AISearchIntent,
   ContentBlueprint,
   ContentBlueprintSection,
   ContentIntelligencePlan,
+  ContentProfile,
   EvidenceAvailability,
 } from './content-types';
 import { SEOEvidence } from './types';
@@ -117,6 +120,226 @@ export class ContentIntelligencePlanner {
   }
 
   /**
+   * Constructs the AdultSEOContext for legitimate adult-industry websites, products, and wellness guides.
+   */
+  public static constructAdultContext(
+    req: AIContentGenerationRequest,
+    _evidence?: Partial<SEOEvidence>
+  ): AdultSEOContext {
+    let subprofile: AdultContentProfile = req.adultProfile || 'adult-products';
+    const combinedText = `${req.mainTopic || ''} ${req.primaryKeyword || ''} ${req.contentType || ''}`.toLowerCase();
+
+    if (!req.adultProfile) {
+      if (/\b(wellness|sexual health|couples guide|wellness guide|intimacy|kegel|pelvic|relationship)\b/i.test(combinedText)) {
+        subprofile = 'sexual-wellness';
+      } else if (/\b(call girl|call girls|escort|escorts|companionship|incall|outcall|vip companion|companion service)\b/i.test(combinedText)) {
+        subprofile = 'escort-services';
+      } else if (/\b(story|stories|erotica|sensual romance|novel|chapter|fiction|erotic story)\b/i.test(combinedText)) {
+        subprofile = 'adult-stories';
+      } else if (/\b(creator|profile|performer|model|biography|onlyfans|fansly)\b/i.test(combinedText)) {
+        subprofile = 'adult-creator';
+      } else if (/\b(video|clip|scene|movie|stream|trailer|playback)\b/i.test(combinedText)) {
+        subprofile = 'adult-video';
+      } else if (/\b(community|forum|board|group|club|discussion)\b/i.test(combinedText)) {
+        subprofile = 'adult-community';
+      } else if (/\b(entertainment|portal|hub|directory|agency)\b/i.test(combinedText)) {
+        subprofile = 'adult-entertainment';
+      } else {
+        subprofile = 'adult-products';
+      }
+    }
+
+    if (subprofile === 'escort-services') {
+      return {
+        isAdultSite: true,
+        profile: 'escort-services',
+        ageRestricted: true,
+        contentClassification: 'adult-service',
+        audience: req.targetAudience || 'Adults 18+ seeking verified companionship, social accompaniment, or VIP escort services',
+        safeSearchConsiderations: [
+          'Escort and adult companionship services are subject to strict adult search filtering and local regulatory compliance.',
+          'Focus on professional companionship terminology, booking etiquette, discretion, and legitimate directory standards.',
+          'Ensure prominent age-verification disclaimers (Strictly 18+ only).',
+        ],
+        trustRequirements: [
+          'Strict age-verification (18+) and mutual consent compliance for all providers and clients.',
+          'Clear client screening procedures, security protocols, and strict discretion guarantees.',
+          'Transparent booking etiquette, duration guidelines, and cancellation policies.',
+          'Zero tolerance for human trafficking or non-consensual exploitation.',
+        ],
+        restrictedClaims: [
+          'STRICT ANTI-FABRICATION: Never invent real individual provider names, telephone numbers, private residential addresses, or personal contact info without verified site evidence.',
+          'Do not generate non-consensual, illegal, or exploitative service descriptions.',
+        ],
+        schemaRecommendations: ['LocalBusiness', 'Service', 'FAQPage', 'BreadcrumbList'],
+        schemaRestrictions: ['Do not invent unverified personal identities or individual phone numbers in schema markup.'],
+      };
+    }
+
+    if (subprofile === 'adult-stories') {
+      return {
+        isAdultSite: true,
+        profile: 'adult-stories',
+        ageRestricted: true,
+        contentClassification: 'adult-literature',
+        audience: req.targetAudience || 'Adult readers 18+ of romantic fiction, sensual literature, and narrative erotica',
+        safeSearchConsiderations: [
+          'Adult fiction and erotica literature are classified under mature creative content.',
+          'Maintain artistic, narrative-rich prose and descriptive storytelling rather than spammy keywords.',
+          'Clear 18+ mature content warnings on story archives.',
+        ],
+        trustRequirements: [
+          'Exclusively consenting adult characters (18+ only) within all narrative arcs.',
+          'Engaging narrative pacing, character development, and atmospheric world-building.',
+          'Clear content warnings, tropes, and genre tags for reader transparency.',
+        ],
+        restrictedClaims: [
+          'STRICT ZERO-TOLERANCE: Absolutely no underage, non-consensual, incestuous, or coercive storylines under any circumstances.',
+          'Do not claim real-world autobiographical events unless explicitly provided as creative nonfiction.',
+        ],
+        schemaRecommendations: ['CreativeWork', 'ShortStory', 'Article', 'BreadcrumbList'],
+        schemaRestrictions: [],
+      };
+    }
+
+    if (subprofile === 'sexual-wellness') {
+      return {
+        isAdultSite: true,
+        profile: 'sexual-wellness',
+        ageRestricted: false,
+        contentClassification: 'sexual-wellness',
+        audience: req.targetAudience || 'Adults, couples, and individuals seeking evidence-based sexual health and wellness education',
+        safeSearchConsiderations: [
+          'Educational wellness guides are generally indexable under standard search settings when maintaining a medical and educational tone.',
+          'Avoid gratuitous or sensationalized explicit descriptions that trigger aggressive SafeSearch filtering.',
+          'Focus on physiological principles, ergonomics, hygiene, and communication.',
+        ],
+        trustRequirements: [
+          'Evidence-backed sexual health and wellness guidance.',
+          'Body-safe hygiene, cleaning, and anatomical safety instructions.',
+          'Non-judgmental, inclusive, and professional tone.',
+          'Clear disclaimers recommending professional healthcare consultation where applicable.',
+        ],
+        restrictedClaims: [
+          'Do not fabricate medical diagnoses or clinical cure guarantees.',
+          'Do not invent anatomical changes or unsupported physiological claims.',
+          'Do not add unnecessary graphic or sensationalized explicit descriptions.',
+        ],
+        schemaRecommendations: ['Article', 'FAQPage', 'MedicalWebPage', 'BreadcrumbList'],
+        schemaRestrictions: ['Do not claim licensed medical author credentials unless provided in evidence.'],
+      };
+    }
+
+    if (subprofile === 'adult-creator') {
+      return {
+        isAdultSite: true,
+        profile: 'adult-creator',
+        ageRestricted: true,
+        contentClassification: 'adult',
+        audience: req.targetAudience || 'Subscribers and consenting adult fans',
+        safeSearchConsiderations: [
+          'Creator profiles are subject to adult search classifications and SafeSearch filtering.',
+          'Maintain professional personal branding and verified platform links.',
+        ],
+        trustRequirements: [
+          'Verified creator identity and consent compliance.',
+          'Transparent subscription tiers, deliverable schedules, and platform links.',
+          'Clear boundary and communication guidelines for community interactions.',
+        ],
+        restrictedClaims: [
+          'STRICT ANTI-FABRICATION: Never invent age, location, measurements, personal history, relationship status, or sexual preferences unless explicitly provided in site evidence.',
+          'Do not fabricate reviews, subscriber counts, or testimonials.',
+        ],
+        schemaRecommendations: ['ProfilePage', 'Person', 'BreadcrumbList'],
+        schemaRestrictions: ['Do not invent schema properties for unverified personal data.'],
+      };
+    }
+
+    if (subprofile === 'adult-video') {
+      return {
+        isAdultSite: true,
+        profile: 'adult-video',
+        ageRestricted: true,
+        contentClassification: 'adult-video',
+        audience: req.targetAudience || 'Adults 18+ seeking categorized video content',
+        safeSearchConsiderations: [
+          'Video content is strictly classified under adult SafeSearch filters.',
+          'Descriptive titles and tags assist internal search and categorized discovery.',
+        ],
+        trustRequirements: [
+          'Accurate descriptive title and category tagging without clickbait.',
+          'Valid video duration, resolution, and thumbnail representation.',
+          'Performer age-verification compliance (2257/regulatory standards).',
+        ],
+        restrictedClaims: [
+          'Do not generate deceptive or misleading video titles.',
+          'Do not invent fake duration, resolution, or embed URLs.',
+        ],
+        schemaRecommendations: ['VideoObject', 'BreadcrumbList'],
+        schemaRestrictions: ['Do not attach invalid thumbnail URLs or unverified duration timestamps.'],
+      };
+    }
+
+    if (subprofile === 'adult-community' || subprofile === 'adult-entertainment') {
+      return {
+        isAdultSite: true,
+        profile: subprofile,
+        ageRestricted: true,
+        contentClassification: 'adult',
+        audience: req.targetAudience || 'Adult community members and consenting enthusiasts',
+        safeSearchConsiderations: [
+          'Community forums and entertainment portals are subject to adult classification.',
+          'Clear age gating and content moderation policies help maintain indexation integrity.',
+        ],
+        trustRequirements: [
+          'Clear community rules, code of conduct, and moderation procedures.',
+          'Age verification and privacy protection policies.',
+          'Transparent reporting mechanisms for unconsented or abusive behavior.',
+        ],
+        restrictedClaims: ['Do not invent fake user activity statistics or fabricated discussions.'],
+        schemaRecommendations: ['DiscussionForumPosting', 'WebPage', 'BreadcrumbList'],
+        schemaRestrictions: [],
+      };
+    }
+
+    // Default: adult-products
+    return {
+      isAdultSite: true,
+      profile: 'adult-products',
+      ageRestricted: true,
+      contentClassification: 'adult-product',
+      audience: req.targetAudience || 'Adults & Consenting Individuals seeking reliable product information',
+      safeSearchConsiderations: [
+        'Adult product pages may receive restricted visibility on SafeSearch-filtered queries.',
+        'Prioritize neutral anatomical/product terminology over sensationalized language to maximize organic indexability.',
+        'Ensure clear age-verification compliance on destination URLs.',
+      ],
+      trustRequirements: [
+        'Accurate product materials and body-safe certifications (medical-grade silicone, body-safe ABS/glass, phthalate-free).',
+        'Clear dimensions, waterproof ratings, power/charging specifications, and noise levels.',
+        'Hygienic cleaning, sanitization, and material compatibility (water-based vs silicone lubricants).',
+        'Discreet billing and packaging information.',
+        'Transparent return, warranty, and customer support terms.',
+      ],
+      restrictedClaims: [
+        'Do not claim medical or anatomical enhancement without clinical evidence.',
+        'Do not invent fabricated customer reviews, ratings, or test results.',
+        'Do not invent non-existent specifications or compatibility guarantees.',
+      ],
+      schemaRecommendations: [
+        'Product',
+        'hasAdultConsideration (https://schema.org/SexualContentConsideration)',
+        'FAQPage',
+        'BreadcrumbList',
+      ],
+      schemaRestrictions: [
+        'Only include AggregateRating or Offer prices if real data is provided in evidence.',
+        'Avoid non-compliant schema tags.',
+      ],
+    };
+  }
+
+  /**
    * Allocates section-level word budget matching the requested target words and content type.
    */
   public static buildSectionWordBudget(
@@ -124,9 +347,327 @@ export class ContentIntelligencePlanner {
     totalTargetWords: number,
     intent: AISearchIntent,
     topic: string,
-    keyword: string
+    keyword: string,
+    contentProfile?: ContentProfile,
+    adultProfile?: AdultContentProfile
   ): ContentBlueprintSection[] {
     const target = Math.max(50, totalTargetWords);
+
+    // =========================================================================
+    // ADULT SUBPROFILE SPECIALIZED BLUEPRINTS
+    // =========================================================================
+    if (contentProfile === 'adult') {
+      if (adultProfile === 'adult-products' || (!adultProfile && contentType === 'product-description')) {
+        const pIntro = Math.round(target * 0.15);
+        const pMaterials = Math.round(target * 0.25);
+        const pFeatures = Math.round(target * 0.25);
+        const pCare = Math.round(target * 0.2);
+        const pFaq = Math.round(target * 0.1);
+        const pCta = Math.max(30, target - (pIntro + pMaterials + pFeatures + pCare + pFaq));
+
+        return [
+          {
+            heading: `Overview & Ergonomic Design of ${topic}`,
+            purpose: 'Introduce the product, ergonomic contours, target use-case, and build quality standards.',
+            targetWords: pIntro,
+            requiredTopics: ['design overview', 'ergonomic form', 'target use cases'],
+            requiredQuestions: [`What makes ${topic} unique in its category?`],
+            requiredEntities: [topic, keyword, 'ergonomic design'],
+            evidence: ['Product overview', 'Design specifications'],
+          },
+          {
+            heading: 'Body-Safe Materials, Certifications & Build Quality',
+            purpose: 'Detail medical-grade materials, hypoallergenic standards, waterproof ratings, and phthalate-free construction.',
+            targetWords: pMaterials,
+            requiredTopics: ['medical-grade silicone', 'body-safe materials', 'waterproof rating', 'phthalate-free'],
+            requiredQuestions: ['Is this product made from body-safe, certified materials?'],
+            requiredEntities: ['body-safe materials', 'medical-grade silicone', 'waterproof'],
+            evidence: ['Material certifications', 'Manufacturer specifications'],
+          },
+          {
+            heading: `Performance Highlights & Key Features for ${keyword}`,
+            purpose: 'Explain power output, motor modes, whisper-quiet decibel levels, battery life, and USB magnetic charging.',
+            targetWords: pFeatures,
+            requiredTopics: ['intensity settings', 'whisper-quiet motor', 'magnetic USB charging', 'battery runtime'],
+            requiredQuestions: ['How long does the battery last and how quiet is the motor?'],
+            requiredEntities: ['battery life', 'whisper-quiet', 'magnetic charging'],
+            evidence: ['Feature specifications'],
+          },
+          {
+            heading: 'Cleaning, Sanitization & Material Compatibility Guide',
+            purpose: 'Provide step-by-step cleaning instructions, antibacterial soap advice, and lubricant compatibility (water-based only).',
+            targetWords: pCare,
+            requiredTopics: ['cleaning and sanitization', 'lubricant compatibility', 'water-based lubricant', 'proper storage'],
+            requiredQuestions: ['How do I safely clean and store this product?'],
+            requiredEntities: ['sanitization', 'water-based lubricant', 'hygienic storage'],
+            evidence: ['Care & maintenance guidelines'],
+          },
+          {
+            heading: 'Frequently Asked Questions',
+            purpose: 'Address discreet shipping, packaging privacy, warranty coverage, and common first-time user inquiries.',
+            targetWords: pFaq,
+            requiredTopics: ['discreet packaging', 'warranty coverage', 'travel lock'],
+            requiredQuestions: ['Is packaging completely discreet and unmarked?'],
+            requiredEntities: ['discreet packaging', 'warranty'],
+            evidence: ['Customer FAQs'],
+          },
+          {
+            heading: 'Summary & Buying Advice',
+            purpose: 'Deliver concise buying verdict and recommended accessories (e.g. water-based lubricant).',
+            targetWords: pCta,
+            requiredTopics: ['buying advice', 'recommended accessories'],
+            requiredQuestions: ['Is this product suitable for my requirements?'],
+            requiredEntities: [topic],
+            evidence: ['Buyer decision framework'],
+          },
+        ];
+      }
+
+      if (adultProfile === 'sexual-wellness') {
+        const numSections = target >= 1000 ? 7 : 6;
+        const wIntro = Math.round(target * 0.12);
+        const wFund = Math.round(target * 0.22);
+        const wPhys = Math.round(target * 0.22);
+        const wPract = Math.round(target * 0.2);
+        const wCare = Math.round(target * 0.12);
+        const wFaq = Math.round(target * 0.08);
+        const wConc = Math.max(40, target - (wIntro + wFund + wPhys + wPract + wCare + wFaq));
+
+        return [
+          {
+            heading: `Understanding ${topic}: Educational Foundations`,
+            purpose: 'Establish healthy, non-judgmental educational context for sexual wellness and intimacy.',
+            targetWords: wIntro,
+            requiredTopics: ['wellness context', 'body positivity', 'educational foundation'],
+            requiredQuestions: [`What are the core fundamentals of ${keyword}?`],
+            requiredEntities: [topic, keyword, 'sexual wellness'],
+            evidence: ['Educational wellness principles'],
+          },
+          {
+            heading: 'Physiological, Anatomical & Psychological Principles',
+            purpose: 'Explain physiological mechanisms, partner communication, consent, and stress reduction factors.',
+            targetWords: wFund,
+            requiredTopics: ['physiology', 'communication', 'consent', 'stress reduction'],
+            requiredQuestions: ['How does intimacy impact overall well-being and stress?'],
+            requiredEntities: ['physiology', 'communication', 'mind-body connection'],
+            evidence: ['Physiological evidence'],
+          },
+          {
+            heading: 'Practical Guidelines, Techniques & Best Practices',
+            purpose: 'Provide actionable, step-by-step best practices for individuals and couples.',
+            targetWords: wPhys,
+            requiredTopics: ['practical guidance', 'partner communication', 'best practices', 'comfort'],
+            requiredQuestions: ['What are effective methods to enhance intimacy and comfort?'],
+            requiredEntities: ['best practices', 'partner connection'],
+            evidence: ['Practical wellness guidelines'],
+          },
+          {
+            heading: 'Body-Safe Product Selection, Materials & Hygiene',
+            purpose: 'Explain how to evaluate body-safe materials, avoid harmful additives (parabens, phthalates), and maintain hygiene.',
+            targetWords: wPract,
+            requiredTopics: ['body-safe selection', 'additive avoidance', 'hygiene standards', 'lubricant types'],
+            requiredQuestions: ['What ingredients and materials should be avoided for sensitive skin?'],
+            requiredEntities: ['body safety', 'hygiene standards', 'lubricant selection'],
+            evidence: ['Material safety guidance'],
+          },
+          {
+            heading: 'Common Misconceptions, Myths & Healthy Expectations',
+            purpose: 'Debunk societal myths, media misconceptions, and performance anxiety traps.',
+            targetWords: wCare,
+            requiredTopics: ['myth debunking', 'performance expectations', 'healthy mindset'],
+            requiredQuestions: ['What common myths hinder healthy intimacy?'],
+            requiredEntities: ['misconceptions', 'healthy mindset'],
+            evidence: ['Clinical wellness insights'],
+          },
+          {
+            heading: 'Frequently Asked Questions',
+            purpose: 'Answer top reader wellness questions with empathy and authoritative clarity.',
+            targetWords: wFaq,
+            requiredTopics: ['wellness questions', 'comfort advice', 'doctor consultation'],
+            requiredQuestions: ['When should someone consult a healthcare professional?'],
+            requiredEntities: ['healthcare advice', 'clarifications'],
+            evidence: ['Wellness FAQs'],
+          },
+          {
+            heading: 'Conclusion & Key Takeaways for Long-Term Wellness',
+            purpose: 'Synthesize core insights into actionable, positive next steps.',
+            targetWords: wConc,
+            requiredTopics: ['wellness synthesis', 'empowerment', 'key takeaways'],
+            requiredQuestions: ['What is the primary takeaway for lasting wellness?'],
+            requiredEntities: [topic],
+            evidence: ['Summary conclusions'],
+          },
+        ];
+      }
+
+      if (adultProfile === 'adult-creator') {
+        const cIntro = Math.round(target * 0.2);
+        const cThemes = Math.round(target * 0.3);
+        const cTiers = Math.round(target * 0.25);
+        const cRules = Math.round(target * 0.15);
+        const cFaq = Math.max(30, target - (cIntro + cThemes + cTiers + cRules));
+
+        return [
+          {
+            heading: `About & Official Profile Overview for ${topic}`,
+            purpose: 'Introduce the verified creator branding, official platform presence, and content themes.',
+            targetWords: cIntro,
+            requiredTopics: ['creator branding', 'official platforms', 'content focus'],
+            requiredQuestions: [`What content themes does ${topic} create?`],
+            requiredEntities: [topic, keyword, 'official profile'],
+            evidence: ['Verified platform profile'],
+          },
+          {
+            heading: 'Content Themes, Schedules & Creative Highlights',
+            purpose: 'Outline regular posting schedules, themed photo/video sets, and direct subscriber perks.',
+            targetWords: cThemes,
+            requiredTopics: ['posting schedule', 'content categories', 'creative highlights'],
+            requiredQuestions: ['What can subscribers expect on a weekly basis?'],
+            requiredEntities: ['content schedule', 'member perks'],
+            evidence: ['Platform publication schedule'],
+          },
+          {
+            heading: 'Subscription Tiers & Verified Member Benefits',
+            purpose: 'Detail official subscription pricing, VIP tier benefits, and messaging availability based on verified facts.',
+            targetWords: cTiers,
+            requiredTopics: ['subscription tiers', 'member benefits', 'messaging access'],
+            requiredQuestions: ['What are the official subscription options?'],
+            requiredEntities: ['subscription tiers', 'benefits'],
+            evidence: ['Verified tier structure'],
+          },
+          {
+            heading: 'Community Guidelines, Respect & Interaction Standards',
+            purpose: 'Set clear boundaries, privacy expectations, and mutual respect guidelines for subscribers.',
+            targetWords: cRules,
+            requiredTopics: ['community rules', 'respectful interaction', 'privacy standards'],
+            requiredQuestions: ['What are the rules for direct messaging and comments?'],
+            requiredEntities: ['community standards', 'boundaries'],
+            evidence: ['Community code of conduct'],
+          },
+          {
+            heading: 'Frequently Asked Questions & Official Links',
+            purpose: 'Answer questions about payment methods, device compatibility, and official link hubs.',
+            targetWords: cFaq,
+            requiredTopics: ['billing', 'official links', 'accessibility'],
+            requiredQuestions: ['Where can fans access the verified official channels?'],
+            requiredEntities: ['official channels', 'FAQs'],
+            evidence: ['Creator FAQs'],
+          },
+        ];
+      }
+
+      if (adultProfile === 'escort-services') {
+        const eIntro = Math.round(target * 0.20);
+        const eSafety = Math.round(target * 0.22);
+        const eServices = Math.round(target * 0.24);
+        const eBooking = Math.round(target * 0.18);
+        const eFaq = Math.max(30, target - (eIntro + eSafety + eServices + eBooking));
+
+        return [
+          {
+            heading: `Premium Companionship & Service Overview for ${topic}`,
+            purpose: 'Introduce the companion agency/directory scope, VIP standards, and professional accompaniment services.',
+            targetWords: eIntro,
+            requiredTopics: ['service overview', 'professional companionship', 'VIP standards', 'directory scope'],
+            requiredQuestions: [`What companionship services are offered for ${topic}?`],
+            requiredEntities: [topic, keyword, 'professional companionship'],
+            evidence: ['Service directory overview'],
+          },
+          {
+            heading: 'Discretion, Privacy & Safety Protocols',
+            purpose: 'Detail client privacy guarantees, secure verification, encrypted communication, and safety standards.',
+            targetWords: eSafety,
+            requiredTopics: ['strict discretion', 'privacy guarantees', 'client screening', 'safety standards'],
+            requiredQuestions: ['How are client privacy and safety maintained?'],
+            requiredEntities: ['discretion', 'privacy protocols', 'screening'],
+            evidence: ['Safety and privacy policy'],
+          },
+          {
+            heading: 'Accompaniment Occasions & Etiquette Guidelines',
+            purpose: 'Describe social accompaniment for business dinners, private travel, formal galas, and respectful client etiquette.',
+            targetWords: eServices,
+            requiredTopics: ['social accompaniment', 'travel companion', 'dinner dates', 'client etiquette'],
+            requiredQuestions: ['What occasions are suitable for companionship booking?'],
+            requiredEntities: ['social accompaniment', 'etiquette'],
+            evidence: ['Service categories'],
+          },
+          {
+            heading: 'Screening, Reservation Process & Booking Policies',
+            purpose: 'Outline the step-by-step reservation process, advance booking requirements, deposit policies, and incall/outcall terms.',
+            targetWords: eBooking,
+            requiredTopics: ['booking process', 'screening requirements', 'advance reservations', 'incall and outcall terms'],
+            requiredQuestions: ['What is the procedure for booking an accompaniment session?'],
+            requiredEntities: ['reservation process', 'booking policy'],
+            evidence: ['Reservation guidelines'],
+          },
+          {
+            heading: 'Frequently Asked Questions & 18+ Client Disclaimers',
+            purpose: 'Answer common client questions regarding rates, cancellation policies, age compliance (18+ only), and discreet billing.',
+            targetWords: eFaq,
+            requiredTopics: ['rate transparency', 'age verification', 'cancellation terms', 'discreet billing'],
+            requiredQuestions: ['What should first-time clients know before reserving?'],
+            requiredEntities: ['FAQs', 'disclaimers', '18+ compliance'],
+            evidence: ['Client FAQs'],
+          },
+        ];
+      }
+
+      if (adultProfile === 'adult-stories') {
+        const sIntro = Math.round(target * 0.18);
+        const sDynamics = Math.round(target * 0.22);
+        const sArc = Math.round(target * 0.28);
+        const sClimax = Math.round(target * 0.20);
+        const sEpilogue = Math.max(30, target - (sIntro + sDynamics + sArc + sClimax));
+
+        return [
+          {
+            heading: `Chapter Premise & Atmospheric Setting: ${topic}`,
+            purpose: 'Establish the narrative scene, sensory environment, mood, and initial character presence.',
+            targetWords: sIntro,
+            requiredTopics: ['setting the scene', 'sensory atmosphere', 'introductory mood'],
+            requiredQuestions: [`How does the story of ${topic} begin?`],
+            requiredEntities: [topic, keyword, 'narrative atmosphere'],
+            evidence: ['Story premise', 'Sensual literature framework'],
+          },
+          {
+            heading: 'Character Dynamics, Chemistry & Rising Tension',
+            purpose: 'Develop character personalities, mutual attraction, witty or intimate dialogue, and romantic chemistry.',
+            targetWords: sDynamics,
+            requiredTopics: ['character chemistry', 'dialogue', 'mutual attraction', 'tension'],
+            requiredQuestions: ['What drives the connection between the characters?'],
+            requiredEntities: ['character dynamics', 'chemistry'],
+            evidence: ['Character profiles', 'Romantic tension arc'],
+          },
+          {
+            heading: 'Core Narrative Arc & Intimate Passion',
+            purpose: 'Depict the central romantic encounter with evocative, consenting, and passionate storytelling.',
+            targetWords: sArc,
+            requiredTopics: ['consensual intimacy', 'passionate narrative', 'sensory details', 'emotional connection'],
+            requiredQuestions: ['How does the intimate encounter unfold?'],
+            requiredEntities: ['sensory narrative', 'consensual romance'],
+            evidence: ['Narrative progression'],
+          },
+          {
+            heading: 'Climax & Emotional Resonance',
+            purpose: 'Deliver the crescendo of the narrative, blending physical intimacy with deep emotional resonance.',
+            targetWords: sClimax,
+            requiredTopics: ['narrative crescendo', 'emotional resonance', 'shared vulnerability'],
+            requiredQuestions: ['How does the emotional bond culminate?'],
+            requiredEntities: ['emotional crescendo', 'climax'],
+            evidence: ['Story resolution'],
+          },
+          {
+            heading: 'Epilogue & Thematic Story Insights',
+            purpose: 'Conclude with reflective aftermath, character reflections, and literary romance themes.',
+            targetWords: sEpilogue,
+            requiredTopics: ['aftermath reflection', 'romance themes', 'literary takeaway'],
+            requiredQuestions: ['What makes this story meaningful for adult romance readers?'],
+            requiredEntities: [topic],
+            evidence: ['Story epilogue'],
+          },
+        ];
+      }
+    }
 
     // 1. Product Description Archetype (typically 200 - 600 words)
     if (contentType === 'product-description') {
@@ -480,13 +1021,18 @@ export class ContentIntelligencePlanner {
       'Incorporate clear schema recommendations and complete metadata packages',
     ];
 
+    const isAdult = req.contentProfile === 'adult' || req.isAdultSite === true;
+    const adultContext = isAdult ? this.constructAdultContext(req, evidence) : undefined;
+
     // Section word budget
     const requiredSections = this.buildSectionWordBudget(
       contentType,
       targetWords,
       intentResult.type,
       topic,
-      keyword
+      keyword,
+      isAdult ? 'adult' : req.contentProfile || 'general',
+      adultContext?.profile
     );
 
     // Internal link opportunities
@@ -512,12 +1058,13 @@ export class ContentIntelligencePlanner {
           ];
 
     // Schema recommendations
-    const schemaRecommendation =
-      contentType === 'product-description'
-        ? ['Product', 'BreadcrumbList', 'Offer']
-        : contentType === 'faq'
-        ? ['FAQPage', 'BreadcrumbList']
-        : ['Article', 'BreadcrumbList'];
+    const schemaRecommendation = adultContext
+      ? adultContext.schemaRecommendations
+      : contentType === 'product-description'
+      ? ['Product', 'BreadcrumbList', 'Offer']
+      : contentType === 'faq'
+      ? ['FAQPage', 'BreadcrumbList']
+      : ['Article', 'BreadcrumbList'];
 
     // Metadata plan
     const metadataPlan = {
@@ -530,9 +1077,14 @@ export class ContentIntelligencePlanner {
     return {
       primaryTopic: topic,
       primaryKeyword: keyword,
+      contentProfile: isAdult ? 'adult' : req.contentProfile || 'general',
+      adultContext,
+      safeSearchConsiderations: adultContext?.safeSearchConsiderations,
       searchIntent: intentResult,
-      audience: req.targetAudience || 'Industry practitioners, buyers, and enthusiastic learners',
-      userGoal: `Thoroughly understand ${topic}, resolve search intent regarding ${keyword}, and make informed decisions with practical guidance.`,
+      audience: req.targetAudience || adultContext?.audience || 'Industry practitioners, buyers, and enthusiastic learners',
+      userGoal: isAdult
+        ? `Provide reliable, professional, and compliant guidance regarding ${keyword}, satisfying user search intent with verified facts and body-safe standards.`
+        : `Thoroughly understand ${topic}, resolve search intent regarding ${keyword}, and make informed decisions with practical guidance.`,
       secondaryKeywords,
       relatedTerms,
       entities,
@@ -564,6 +1116,8 @@ export class ContentIntelligencePlanner {
       primaryTopic: req.mainTopic || 'General Topic',
       sections: plan.requiredSections,
       totalTargetWords: targetWords,
+      contentProfile: plan.contentProfile,
+      adultContext: plan.adultContext,
     };
   }
 }

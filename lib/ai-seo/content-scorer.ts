@@ -148,32 +148,37 @@ export class ContentScorer {
     content: string,
     plan: ContentIntelligencePlan,
     req: AIContentGenerationRequest,
-    actualWords: number,
-    targetWords: number
+    actualWords?: number,
+    targetWords?: number
   ): { details: AIContentQualityScoreDetails; issues: string[]; strengths: string[] } {
     const topicCoverage = this.calculateTopicCoverage(content, plan);
     const issues: string[] = [];
     const strengths: string[] = [];
 
-    // Word count compliance
-    const deviation = actualWords - targetWords;
-    const tolerance = Math.max(25, targetWords * 0.2);
-    const wordCountPass = Math.abs(deviation) <= tolerance || actualWords >= targetWords * 0.85;
+    const effectiveActualWords = typeof actualWords === 'number' ? actualWords : content.trim().split(/\s+/).filter(Boolean).length;
+    const effectiveTargetWords = typeof targetWords === 'number' ? targetWords : req.wordLimit || 800;
 
-    if (!wordCountPass && actualWords < targetWords * 0.7) {
-      issues.push(`Content length (${actualWords} words) is below target scope (${targetWords} words).`);
+    // Word count compliance (95% - 110% target policy)
+    const minimumTarget = effectiveTargetWords >= 200 ? Math.round(effectiveTargetWords * 0.95) : Math.max(15, Math.round(effectiveTargetWords * 0.80));
+    const maximumTarget = effectiveTargetWords >= 200 ? Math.round(effectiveTargetWords * 1.10) : Math.max(effectiveTargetWords + 40, Math.round(effectiveTargetWords * 1.40));
+    const wordCountPass = effectiveActualWords >= minimumTarget && effectiveActualWords <= maximumTarget;
+
+    if (effectiveActualWords < minimumTarget) {
+      issues.push(`Content length (${effectiveActualWords} words) is below minimum target range (${minimumTarget}–${maximumTarget} words).`);
+    } else if (effectiveActualWords > maximumTarget) {
+      issues.push(`Content length (${effectiveActualWords} words) exceeds target range (${minimumTarget}–${maximumTarget} words).`);
     } else {
-      strengths.push(`Content length (${actualWords} words) achieves requested depth (${targetWords} target).`);
+      strengths.push(`Content length (${effectiveActualWords} words) satisfies target budget (${minimumTarget}–${maximumTarget} words).`);
     }
 
     // Keyword naturalness (anti-stuffing)
     const primaryKw = (req.primaryKeyword || '').toLowerCase().trim();
     const matches = primaryKw ? (content.toLowerCase().match(new RegExp(primaryKw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length : 0;
-    const density = actualWords > 0 ? (matches * primaryKw.split(/\s+/).length) / actualWords : 0;
+    const density = effectiveActualWords > 0 ? (matches * primaryKw.split(/\s+/).length) / effectiveActualWords : 0;
     const keywordStuffing =
       (density > 0.08 && matches >= 4) ||
       (density > 0.05 && matches >= 6) ||
-      (actualWords < 50 && matches >= 4);
+      (effectiveActualWords < 50 && matches >= 4);
 
     let keywordNaturalness = 95;
     if (keywordStuffing) {
@@ -191,7 +196,7 @@ export class ContentScorer {
     const isShortContent =
       ['product-description', 'category-description', 'paragraph', 'blog-intro', 'blog-conclusion', 'meta-title', 'meta-description'].includes(
         req.contentType
-      ) || targetWords <= 250;
+      ) || effectiveTargetWords <= 250;
 
     let structureScore = 80;
     if (headingCount >= 4) {
@@ -211,9 +216,42 @@ export class ContentScorer {
     const avgLen = words.reduce((acc, w) => acc + w.length, 0) / (words.length || 1);
     const readabilityScore = avgLen > 6.5 ? 78 : avgLen > 4.5 ? 92 : 88;
 
-    const originalValue = Math.min(96, Math.max(75, 82 + (content.includes('example') || content.includes('step') || content.includes('sensor') || content.includes('weight') ? 10 : 0)));
-    const evidenceSupport = Math.min(98, Math.max(70, 84 + (content.includes('specification') || content.includes('feature') || content.includes('best practice') || content.includes('accuracy') ? 10 : 0)));
-    const differentiation = topicCoverage.differentiationScore;
+    // Computed auxiliary submetrics
+    const originalValue = Math.min(95, Math.max(70, Math.round(topicCoverage.criticalTopicsCovered * 0.5 + 45)));
+    const evidenceSupport = req.evidence ? 95 : 85;
+    const differentiation = topicCoverage.differentiationScore || 85;
+
+    // Adult profile specific trust & safety evaluation
+    const isAdult = plan.contentProfile === 'adult' || req.contentProfile === 'adult' || req.isAdultSite === true;
+    let trustScore = 90;
+    let safetyAccuracy = 95;
+
+    if (isAdult) {
+      const textLower = content.toLowerCase();
+      const hasMaterialInfo = /body-safe|silicone|phthalate|hypoallergenic|waterproof|sanitiz|hygiene|cleaning/i.test(textLower);
+      const hasDiscreetInfo = /discreet|packaging|privacy|confidential/i.test(textLower);
+      const hasClinicalDisclaim = /healthcare|medical|doctor|consult/i.test(textLower);
+
+      if (hasMaterialInfo) {
+        trustScore += 5;
+        strengths.push('Includes explicit body-safe material and hygiene standards.');
+      }
+      if (hasDiscreetInfo) {
+        strengths.push('Addresses discreet packaging and customer privacy expectations.');
+      }
+      if (hasClinicalDisclaim) {
+        strengths.push('Maintains appropriate educational disclaimers regarding health consultation.');
+      }
+
+      // Check for unverified medical claims
+      if (/cure|guaranteed enlargement|permanent anatomical change|reverses all/i.test(textLower)) {
+        safetyAccuracy -= 30;
+        issues.push('Contains unsupported medical or physiological claims.');
+      }
+
+      trustScore = Math.min(98, Math.max(60, trustScore));
+      safetyAccuracy = Math.min(99, Math.max(50, safetyAccuracy));
+    }
 
     // Overall People-First Quality Score (0-100)
     let score = Math.round(
@@ -250,6 +288,8 @@ export class ContentScorer {
         keywordNaturalness,
         structure: structureScore,
         differentiation,
+        trust: isAdult ? trustScore : undefined,
+        safetyAccuracy: isAdult ? safetyAccuracy : undefined,
       },
       issues,
       strengths,

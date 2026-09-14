@@ -365,5 +365,120 @@ describe('AI SEO Content Generator Test Suite', () => {
       assert.ok(result.metadata.title.length > 0);
     });
   });
+
+  // =========================================================================
+  // 10. CONTENT BLUEPRINT & EVIDENCE AVAILABILITY TRACKING
+  // =========================================================================
+  describe('10. Content Blueprint & Evidence Availability Tracking', () => {
+    it('10.1 Returns structured ContentBlueprint with section word budgets and topics', async () => {
+      const req: AIContentGenerationRequest = {
+        contentType: 'blog-article',
+        mainTopic: 'Wireless Gaming Mouse',
+        primaryKeyword: 'wireless gaming mouse',
+        wordLimit: 800,
+        searchIntent: 'commercial',
+      };
+
+      const result = await AIContentGenerator.generate(req, new RuleInformedProvider());
+
+      // Check root response fields
+      assert.ok(result.contentBlueprint);
+      assert.ok(result.blueprint);
+      assert.ok(result.contentPlan);
+      assert.strictEqual(result.contentBlueprint.intent, 'commercial');
+      assert.strictEqual(result.contentBlueprint.totalTargetWords, 800);
+      assert.ok(result.contentBlueprint.sections.length >= 4);
+
+      // Verify each section has word budget and required topics
+      let totalBudget = 0;
+      for (const sec of result.contentBlueprint.sections) {
+        assert.ok(sec.heading.length > 0);
+        assert.ok(sec.purpose.length > 0);
+        assert.ok(sec.targetWords > 0);
+        assert.ok(sec.requiredTopics.length > 0);
+        totalBudget += sec.targetWords;
+      }
+      assert.strictEqual(totalBudget, 800);
+    });
+
+    it('10.2 Accurately tracks evidenceAvailability flags when evidence is absent or provided', async () => {
+      // Without SERP or crawl evidence
+      const req1: AIContentGenerationRequest = {
+        contentType: 'category-description',
+        mainTopic: 'Gaming Keyboards',
+        primaryKeyword: 'mechanical keyboard',
+      };
+
+      const res1 = await AIContentGenerator.generate(req1, new RuleInformedProvider());
+      assert.strictEqual(res1.evidenceAvailability.keywordEvidence, true);
+      assert.strictEqual(res1.evidenceAvailability.serpEvidence, false);
+      assert.strictEqual(res1.evidenceAvailability.crawlEvidence, false);
+      assert.strictEqual(res1.evidenceAvailability.competitorEvidence, false);
+
+      // With full crawl and competitor evidence
+      const req2: AIContentGenerationRequest = {
+        contentType: 'category-description',
+        mainTopic: 'Gaming Keyboards',
+        primaryKeyword: 'mechanical keyboard',
+        evidence: {
+          url: 'https://example.com/keyboards',
+          technical: { title: { value: 'Keyboards', isMissing: false } } as any,
+          competitors: {
+            contentGapsVsTopRanked: ['Switch comparison matrix'],
+            topCompetitorUrls: ['https://competitor.com/keyboards'],
+          } as any,
+        },
+      };
+
+      const res2 = await AIContentGenerator.generate(req2, new RuleInformedProvider());
+      assert.strictEqual(res2.evidenceAvailability.keywordEvidence, true);
+      assert.strictEqual(res2.evidenceAvailability.crawlEvidence, true);
+      assert.strictEqual(res2.evidenceAvailability.competitorEvidence, true);
+    });
+  });
+
+  // =========================================================================
+  // 11. TELEMETRY, OPPORTUNITY SCORE & DISCLAIMER COMPLIANCE
+  // =========================================================================
+  describe('11. Telemetry, SEO Opportunity Score & Disclaimers', () => {
+    it('11.1 Records comprehensive generation telemetry without sensitive data', async () => {
+      const req: AIContentGenerationRequest = {
+        contentType: 'blog-article',
+        mainTopic: 'Wireless Gaming Mouse',
+        primaryKeyword: 'wireless gaming mouse',
+        wordLimit: 800,
+      };
+
+      const result = await AIContentGenerator.generate(req, new RuleInformedProvider());
+
+      assert.ok(result.generation);
+      assert.ok(typeof result.generation.generationAttempts === 'number');
+      assert.ok(typeof result.generation.expansionAttempts === 'number');
+      assert.ok(typeof result.generation.sectionsGenerated === 'number');
+      assert.strictEqual(result.generation.requestedWords, 800);
+      assert.ok(result.generation.actualWords > 0);
+      assert.ok(result.generation.durationMs !== undefined);
+      assert.ok(result.generation.provider.length > 0);
+      assert.ok(typeof result.generation.fallbackUsed === 'boolean');
+      assert.ok(result.generation.expansionPasses <= 2);
+    });
+
+    it('11.2 Evaluates SEO Opportunity Score and displays non-prediction disclaimers', async () => {
+      const req: AIContentGenerationRequest = {
+        contentType: 'blog-article',
+        mainTopic: 'Wireless Gaming Mouse',
+        primaryKeyword: 'wireless gaming mouse',
+        wordLimit: 800,
+      };
+
+      const result = await AIContentGenerator.generate(req, new RuleInformedProvider());
+
+      assert.ok(typeof result.contentQuality.seoOpportunity === 'number');
+      assert.ok(result.contentQuality.seoOpportunity >= 0 && result.contentQuality.seoOpportunity <= 100);
+      assert.ok(result.disclaimers.seoOpportunityNotice.includes('SEO Opportunity Score'));
+      assert.ok(result.disclaimers.seoOpportunityNotice.includes('not a prediction'));
+      assert.ok(result.disclaimers.noRankingGuarantee.includes('rankings cannot be guaranteed'));
+    });
+  });
 });
 

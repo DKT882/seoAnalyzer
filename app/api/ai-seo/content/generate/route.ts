@@ -53,6 +53,19 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     logger.error('AI Content Generation API Error:', err);
+    if (err.code === 'ADULT_PROHIBITED_CONTENT') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'ADULT_PROHIBITED_CONTENT',
+            message: err.message || 'Prohibited content detected. Content generation blocked by safety policy.',
+            violationCategory: err.violationCategory,
+          },
+        },
+        { status: 400 }
+      );
+    }
     const errorCode = err.code || (err.message?.includes('timed out') ? 'CONTENT_GENERATION_LLM_TIMEOUT' : 'CONTENT_GENERATION_FAILED');
     return NextResponse.json(
       {

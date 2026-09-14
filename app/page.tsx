@@ -345,7 +345,7 @@ function AnalyzerContent() {
   const hasActiveAnyReport = Boolean(crawlReport || report || inspectedPageReport);
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+    <div style={{ minHeight: '100vh', width: '100%', maxWidth: '100%', overflowX: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       {/* Top Main Navigation Bar */}
       <Navbar
         activeTab={navTab}
@@ -357,7 +357,7 @@ function AnalyzerContent() {
       />
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, maxWidth: '1440px', width: '100%', margin: '0 auto', padding: '2rem' }}>
+      <main className="main-container">
         {/* View 1: Competitor Comparison (2-5 Sites) */}
         {navTab === 'competitors' && <CompetitorCompareView />}
 

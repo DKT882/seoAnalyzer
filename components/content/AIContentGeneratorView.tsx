@@ -28,6 +28,10 @@ import {
   Info,
   ListChecks,
   XCircle,
+  ShieldAlert,
+  EyeOff,
+  Lock,
+  FileCheck,
 } from 'lucide-react';
 import {
   AIContentGenerationRequest,
@@ -35,6 +39,8 @@ import {
   AIContentType,
   AISearchIntent,
   AIContentTone,
+  ContentProfile,
+  AdultContentProfile,
 } from '@/lib/ai-seo/content-types';
 
 interface AIContentGeneratorViewProps {
@@ -44,6 +50,26 @@ interface AIContentGeneratorViewProps {
   initialEvidence?: any;
   onApplyFix?: (fixContent: string) => void;
 }
+
+const CONTENT_PROFILES: Array<{ id: ContentProfile; label: string; description: string }> = [
+  { id: 'general', label: 'General Web (Standard)', description: 'Standard editorial and informational web content.' },
+  { id: 'ecommerce', label: 'E-Commerce', description: 'Product and category pages optimized for conversion.' },
+  { id: 'saas', label: 'SaaS & Software', description: 'Technical software, B2B, and feature pages.' },
+  { id: 'publisher', label: 'Publisher & Media', description: 'News, magazines, and long-form articles.' },
+  { id: 'local-business', label: 'Local Business', description: 'Geo-targeted local service and location pages.' },
+  { id: 'adult', label: 'Adult / 18+ SEO', description: 'Legitimate adult products, sexual wellness, creators, and media.' },
+];
+
+const ADULT_SUBPROFILES: Array<{ id: AdultContentProfile; label: string; description: string }> = [
+  { id: 'adult-products', label: 'Adult Products & Novelties', description: 'Product descriptions, body safety, materials, and buying guides.' },
+  { id: 'sexual-wellness', label: 'Sexual Wellness & Education', description: 'Evidence-based health, intimacy, and educational wellness guides.' },
+  { id: 'escort-services', label: 'Call Girl & Escort Services (Agency/Directory)', description: 'Legitimate directory, booking etiquette, discretion, and city service SEO guides.' },
+  { id: 'adult-stories', label: 'Adult Stories & Erotica Literature', description: 'Narrative storytelling, romantic fiction, sensual chapters, and literary themes.' },
+  { id: 'adult-entertainment', label: 'Adult Entertainment & Portals', description: 'Category descriptions, platform overviews, and directories.' },
+  { id: 'adult-creator', label: 'Adult Creator & Performer', description: 'Verified creator profiles, tiers, schedules, and official channels.' },
+  { id: 'adult-community', label: 'Adult Community & Forums', description: 'Community rules, discussions, safety, and moderation policies.' },
+  { id: 'adult-video', label: 'Adult Video & Streaming', description: 'Video descriptions, duration, performers, and safe metadata.' },
+];
 
 const CONTENT_TYPES: Array<{ id: AIContentType; label: string; defaultWords: number }> = [
   { id: 'product-description', label: 'Product Description', defaultWords: 250 },
@@ -71,6 +97,8 @@ export function AIContentGeneratorView({
   initialEvidence,
 }: AIContentGeneratorViewProps) {
   // Input form state
+  const [contentProfile, setContentProfile] = useState<ContentProfile>('general');
+  const [adultProfile, setAdultProfile] = useState<AdultContentProfile>('adult-products');
   const [contentType, setContentType] = useState<AIContentType>(initialContentType);
   const [mainTopic, setMainTopic] = useState<string>(initialTopic || initialEvidence?.topic || '');
   const [primaryKeyword, setPrimaryKeyword] = useState<string>(initialKeyword || initialEvidence?.primaryKeyword || '');
@@ -187,6 +215,9 @@ export function AIContentGeneratorView({
     setGenerationError(null);
 
     const payload: AIContentGenerationRequest = {
+      contentProfile,
+      adultProfile: contentProfile === 'adult' ? adultProfile : undefined,
+      isAdultSite: contentProfile === 'adult',
       contentType,
       mainTopic: mainTopic.trim(),
       primaryKeyword: primaryKeyword.trim() || mainTopic.trim(),
@@ -267,22 +298,24 @@ export function AIContentGeneratorView({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+    <div className="ai-generator-root">
       {/* Header Banner */}
       <div
         style={{
           background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.08) 100%)',
           border: '1px solid rgba(99, 102, 241, 0.25)',
           borderRadius: 'var(--radius-lg)',
-          padding: '1.75rem',
+          padding: '1.5rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '1rem',
+          width: '100%',
+          boxSizing: 'border-box',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: '1 1 300px', minWidth: 0 }}>
           <div
             style={{
               width: '48px',
@@ -294,21 +327,22 @@ export function AIContentGeneratorView({
               justifyContent: 'center',
               color: '#fff',
               boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
+              flexShrink: 0,
             }}
           >
             <Sparkles size={26} />
           </div>
-          <div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, color: '#fff' }}>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, color: '#fff', wordBreak: 'break-word' }}>
               AI SEO Content Generator
             </h2>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0' }}>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', lineHeight: 1.4 }}>
               Generate comprehensive, human-grade, evidence-backed SEO content, metadata, schema, and topical packages.
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
           <span
             style={{
               padding: '0.35rem 0.75rem',
@@ -321,6 +355,7 @@ export function AIContentGeneratorView({
               display: 'flex',
               alignItems: 'center',
               gap: '0.35rem',
+              whiteSpace: 'nowrap',
             }}
           >
             <ShieldCheck size={14} />
@@ -330,28 +365,11 @@ export function AIContentGeneratorView({
       </div>
 
       {/* Main Grid: Inputs Left, Results Right */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: result ? '420px 1fr' : '1fr',
-          gap: '2rem',
-          alignItems: 'start',
-        }}
-      >
+      <div className={`ai-generator-grid ${result ? 'has-results' : ''}`}>
         {/* ========================================================================= */}
-        {/* INPUT FORM PANEL */}
+        {/* INPUT FORM PANEL (Grows naturally in normal document flow) */}
         {/* ========================================================================= */}
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '1.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.25rem',
-          }}
-        >
+        <div className="ai-generator-left-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Sliders size={18} color="var(--primary)" />
@@ -363,6 +381,100 @@ export function AIContentGeneratorView({
               </span>
             )}
           </div>
+
+          {/* Content Profile */}
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+              Content Profile / Industry Archetype
+            </label>
+            <select
+              value={contentProfile}
+              onChange={(e) => setContentProfile(e.target.value as ContentProfile)}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-sm)',
+                background: contentProfile === 'adult' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(0, 0, 0, 0.25)',
+                border: contentProfile === 'adult' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-subtle)',
+                color: contentProfile === 'adult' ? '#fca5a5' : '#fff',
+                fontSize: '0.9rem',
+                outline: 'none',
+                fontWeight: contentProfile === 'adult' ? 600 : 400,
+              }}
+            >
+              {CONTENT_PROFILES.map((p) => (
+                <option key={p.id} value={p.id} style={{ background: '#1e1e24', color: '#fff' }}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+              {CONTENT_PROFILES.find((p) => p.id === contentProfile)?.description}
+            </div>
+          </div>
+
+          {/* Adult Subprofile Selector & Safety Badge (if adult) */}
+          {contentProfile === 'adult' && (
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.85rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+              }}
+            >
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fca5a5', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                  <ShieldAlert size={15} color="#f87171" />
+                  <span>Adult 18+ Content Category</span>
+                </label>
+                <select
+                  value={adultProfile}
+                  onChange={(e) => setAdultProfile(e.target.value as AdultContentProfile)}
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(0, 0, 0, 0.4)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                  }}
+                >
+                  {ADULT_SUBPROFILES.map((sub) => (
+                    <option key={sub.id} value={sub.id} style={{ background: '#1e1e24', color: '#fff' }}>
+                      {sub.label}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: '0.75rem', color: '#fca5a5', marginTop: '0.25rem' }}>
+                  {ADULT_SUBPROFILES.find((sub) => sub.id === adultProfile)?.description}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.4,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.4rem',
+                  borderTop: '1px solid rgba(239, 68, 68, 0.15)',
+                  paddingTop: '0.5rem',
+                }}
+              >
+                <Lock size={13} color="#f87171" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>
+                  <strong>Strict 18+ Safety Guardrails Active:</strong> Minors, CSAM, non-consensual content, and unverified personal attributes are strictly prohibited. SafeSearch metadata and adult schema are automatically formatted.
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Content Type */}
           <div>
@@ -500,7 +612,7 @@ export function AIContentGeneratorView({
           </div>
 
           {/* Search Intent & Tone Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(140px, 100%), 1fr))', gap: '0.75rem' }}>
             <div>
               <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
                 Search Intent
@@ -631,7 +743,7 @@ export function AIContentGeneratorView({
               )}
 
               {/* Target Audience & CTA */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(140px, 100%), 1fr))', gap: '0.75rem' }}>
                 <div>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
                     Target Audience
@@ -812,20 +924,10 @@ export function AIContentGeneratorView({
         </div>
 
         {/* ========================================================================= */}
-        {/* RESULTS PANEL */}
+        {/* RESULTS PANEL (Independently scrollable on desktop) */}
         {/* ========================================================================= */}
         {result ? (
-          <div
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1.5rem',
-            }}
-          >
+          <div className="ai-generator-right-panel custom-scrollbar">
             {/* Fallback Telemetry Warning Banner */}
             {result.generation?.fallbackUsed && (
               <div
@@ -852,16 +954,7 @@ export function AIContentGeneratorView({
               </div>
             )}
             {/* Tab Navigation for Results */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                borderBottom: '1px solid var(--border-subtle)',
-                paddingBottom: '0.75rem',
-                overflowX: 'auto',
-              }}
-            >
+            <div className="ai-generator-tabs-nav custom-scrollbar">
               {[
                 { id: 'strategy', label: 'Strategy & Blueprint', icon: <Compass size={15} /> },
                 { id: 'content', label: 'Generated Content', icon: <FileText size={15} /> },
@@ -875,19 +968,10 @@ export function AIContentGeneratorView({
                 <button
                   key={tab.id}
                   onClick={() => setActiveResultTab(tab.id as any)}
+                  className="ai-generator-tab-btn"
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    padding: '0.55rem 0.85rem',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.85rem',
-                    fontWeight: 600,
                     background: activeResultTab === tab.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.04)',
                     color: activeResultTab === tab.id ? '#fff' : 'var(--text-secondary)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
                   }}
                 >
                   {tab.icon}
@@ -957,6 +1041,99 @@ export function AIContentGeneratorView({
                   </div>
                 </div>
 
+                {/* 1.5. Adult / 18+ SEO Strategy & Compliance Card (if Adult profile) */}
+                {(result.adultContext || result.contentPlan?.adultContext || result.isAdultSite) && (
+                  <div
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.06)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.85rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <ShieldAlert size={20} color="#f87171" />
+                        <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#fca5a5' }}>
+                          Adult / 18+ SEO Strategy & Policy Compliance
+                        </h4>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span
+                          style={{
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '20px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            background: 'rgba(239, 68, 68, 0.2)',
+                            color: '#f87171',
+                            border: '1px solid #f87171',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {result.adultContext?.contentClassification || result.adultContext?.profile || result.contentPlan?.adultContext?.profile || 'Adult 18+'}
+                        </span>
+                        <span
+                          style={{
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '20px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            color: '#fff',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                          }}
+                        >
+                          Age Restricted: 18+ Mandatory
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="ai-grid-2col">
+                      <div style={{ background: 'rgba(0, 0, 0, 0.25)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#fca5a5', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <EyeOff size={13} />
+                          <span>SafeSearch Engine Filter Behavior</span>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: '#fff', marginTop: '0.25rem', lineHeight: 1.4 }}>
+                          {result.adultContext?.safeSearchConsiderations?.[0] ||
+                            'Standard SafeSearch may restrict explicit visual SERP features. Textual rankings rely on verified entity relevance, exact intent alignment, and compliance trust signals.'}
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'rgba(0, 0, 0, 0.25)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <ShieldCheck size={13} />
+                          <span>Trust & Health/Safety Standards</span>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: '#fff', marginTop: '0.25rem', lineHeight: 1.4 }}>
+                          {result.adultContext?.trustRequirements?.[0] ||
+                            'Body-safe materials, phthalate-free certifications, educational tone, and clear 18+ age verification disclaimers.'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {result.adultContext?.restrictedClaims && result.adultContext.restrictedClaims.length > 0 && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', background: 'rgba(0,0,0,0.25)', padding: '0.6rem 0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                        <strong style={{ color: '#fca5a5' }}>Prohibited & Restricted Claims Guardrails: </strong>
+                        <span>{result.adultContext.restrictedClaims.join(' • ')}</span>
+                      </div>
+                    )}
+
+                    {result.adultContext?.schemaRecommendations && result.adultContext.schemaRecommendations.length > 0 && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <strong style={{ color: '#38bdf8' }}>Google-Compliant Schema Directive: </strong>
+                        <span style={{ color: '#fff', fontFamily: 'monospace', fontSize: '0.75rem', background: 'rgba(0,0,0,0.4)', padding: '0.2rem 0.5rem', borderRadius: '3px', wordBreak: 'break-all' }}>
+                          {result.adultContext.schemaRecommendations.join(', ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* 2. Evidence Availability Bar */}
                 <div
                   style={{
@@ -976,7 +1153,7 @@ export function AIContentGeneratorView({
                     </h4>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                  <div className="ai-grid-4col">
                     <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Keyword Evidence</div>
                       <div style={{ fontSize: '0.85rem', fontWeight: 600, color: result.evidenceAvailability?.keywordEvidence ? '#4ade80' : '#fbbf24', marginTop: '0.2rem' }}>
@@ -1031,7 +1208,7 @@ export function AIContentGeneratorView({
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))', gap: '1rem' }}>
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.3rem' }}>
                         <span style={{ color: 'var(--text-secondary)' }}>Critical Topic Clusters</span>
@@ -1119,7 +1296,7 @@ export function AIContentGeneratorView({
                       </span>
                     </div>
 
-                    <div style={{ overflowX: 'auto' }}>
+                    <div className="ai-table-responsive custom-scrollbar">
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left', color: 'var(--text-secondary)' }}>
@@ -1181,10 +1358,10 @@ export function AIContentGeneratorView({
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-subtle)',
                     flexWrap: 'wrap',
-                    gap: '0.5rem',
+                    gap: '0.75rem',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem', fontSize: '0.85rem' }}>
                     <div>
                       <span style={{ color: 'var(--text-secondary)' }}>Actual Length: </span>
                       <strong style={{ color: '#fff' }}>{result.actualWordCount} words</strong>
@@ -1201,7 +1378,7 @@ export function AIContentGeneratorView({
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       onClick={() => handleCopy(result.content, 'content')}
@@ -1267,8 +1444,11 @@ export function AIContentGeneratorView({
                       deviation: count - result.requestedWordCount,
                     });
                   }}
+                  className="custom-scrollbar"
                   style={{
                     width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
                     padding: '1rem',
                     borderRadius: 'var(--radius-sm)',
                     background: 'rgba(0, 0, 0, 0.3)',
@@ -1278,6 +1458,8 @@ export function AIContentGeneratorView({
                     lineHeight: '1.6',
                     outline: 'none',
                     fontFamily: 'inherit',
+                    resize: 'vertical',
+                    minHeight: '350px',
                   }}
                 />
               </div>
@@ -1286,13 +1468,7 @@ export function AIContentGeneratorView({
             {/* TAB 2: SEO & KEYWORDS */}
             {activeResultTab === 'seo' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '1rem',
-                  }}
-                >
+                <div className="ai-grid-4col">
                   <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Primary Keyword</div>
                     <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginTop: '0.25rem' }}>{result.seo.primaryKeyword}</div>
@@ -1327,7 +1503,7 @@ export function AIContentGeneratorView({
                   <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>
                     Keyword & Topical Coverage Analysis
                   </h4>
-                  <div style={{ overflowX: 'auto' }}>
+                  <div className="ai-table-responsive custom-scrollbar">
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left', color: 'var(--text-secondary)' }}>
@@ -1440,7 +1616,7 @@ export function AIContentGeneratorView({
                 </div>
 
                 {/* URL Slug & H1 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '1rem' }}>
                   <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Suggested Clean Slug</div>
                     <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--primary)', marginTop: '0.25rem' }}>/{result.metadata.slug}</div>
@@ -1474,7 +1650,7 @@ export function AIContentGeneratorView({
             {/* TAB 4: STRUCTURED DATA */}
             {activeResultTab === 'schema' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
                   <div>
                     <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: '#fff' }}>
                       Recommended Schema.org Structured Data
@@ -1525,6 +1701,7 @@ export function AIContentGeneratorView({
 
                 {result.structuredData.schemaSnippet && (
                   <pre
+                    className="ai-code-block custom-scrollbar"
                     style={{
                       background: 'rgba(0, 0, 0, 0.4)',
                       padding: '1rem',
@@ -1532,7 +1709,6 @@ export function AIContentGeneratorView({
                       border: '1px solid var(--border-subtle)',
                       color: '#a5f3fc',
                       fontSize: '0.85rem',
-                      overflowX: 'auto',
                       fontFamily: 'monospace',
                     }}
                   >
@@ -1544,7 +1720,7 @@ export function AIContentGeneratorView({
 
             {/* TAB 5: SOCIAL SHARING */}
             {activeResultTab === 'social' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+              <div className="ai-grid-2col">
                 {/* OpenGraph Preview */}
                 <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                   <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -1577,7 +1753,7 @@ export function AIContentGeneratorView({
             {activeResultTab === 'quality' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 {/* Two-Card Header: Quality Heuristic & SEO Opportunity */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                <div className="ai-grid-2col">
                   <div
                     style={{
                       background: 'rgba(0,0,0,0.25)',
@@ -1637,7 +1813,7 @@ export function AIContentGeneratorView({
                     <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>
                       Quality Sub-Metrics Breakdown (0–100)
                     </h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                    <div className="ai-grid-metrics">
                       <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.6rem', borderRadius: '4px' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Intent Fit</div>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#4ade80' }}>{result.contentQuality.details.intentSatisfaction}</div>
@@ -1666,6 +1842,18 @@ export function AIContentGeneratorView({
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Structure</div>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#a78bfa' }}>{result.contentQuality.details.structure}</div>
                       </div>
+                      {typeof result.contentQuality.details.trust === 'number' && (
+                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.6rem', borderRadius: '4px' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#4ade80' }}>Trust / Safety Standard</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#4ade80' }}>{result.contentQuality.details.trust}</div>
+                        </div>
+                      )}
+                      {typeof result.contentQuality.details.safetyAccuracy === 'number' && (
+                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.6rem', borderRadius: '4px' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#f87171' }}>Safety & Policy Score</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f87171' }}>{result.contentQuality.details.safetyAccuracy}</div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1677,7 +1865,7 @@ export function AIContentGeneratorView({
                       <ShieldCheck size={16} color="#4ade80" />
                       <span>Evidence-Backed Claims & Source Provenance</span>
                     </h4>
-                    <div style={{ overflowX: 'auto' }}>
+                    <div className="ai-table-responsive custom-scrollbar">
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left', color: 'var(--text-secondary)' }}>
@@ -1773,7 +1961,7 @@ export function AIContentGeneratorView({
             {/* TAB 7: CONTENT IMPROVEMENT DIFF */}
             {activeResultTab === 'improvement' && result.contentImprovement && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="ai-grid-2col">
                   <div>
                     <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f87171', marginBottom: '0.4rem' }}>Original Text</div>
                     <div style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
